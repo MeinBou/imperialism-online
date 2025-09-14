@@ -366,6 +366,7 @@
         let panzoom;
         let localTimers = [];
         let localRoster = [];
+        let animationInterval = null;
 
         // --- FUNZIONI DI NAVIGAZIONE E UI ---
         const showScreen = (screenId) => {
@@ -604,8 +605,11 @@
                     showScreen('game-screen');
                     showMessage(gameData.message, 0);
                     updateArena(gameData);
+                    // Avvia l'animazione visiva per tutti i client
+                    displaySelectionAnimation(gameData);
+                    // L'host gestisce la logica di selezione
                     if (isHost) {
-                        handleRoundAnimations(gameData);
+                        handleRoundLogic(gameData);
                     }
                     break;
                 case 'voting':
@@ -664,30 +668,18 @@
         };
         
         // --- LOGICA DI GIOCO ---
-        let isAnimating = false;
-        const handleRoundAnimations = async (gameData) => {
-            if (isAnimating) return;
-            isAnimating = true;
+        let isLogicRunning = false;
+        const handleRoundLogic = async (gameData) => {
+            if (isLogicRunning) return;
+            isLogicRunning = true;
 
             const gameRef = doc(db, "games", currentGameId);
             const activeCharacters = gameData.characters.filter(c => !gameData.eliminated.some(e => e.id === c.id));
             
-            if (gameData.gameState === 'selecting_attacker') {
-                await new Promise(resolve => { // Roulette animation
-                    let count = 0, lastHighlight = null;
-                    const interval = setInterval(() => {
-                        if (lastHighlight) lastHighlight.classList.remove('roulette-active');
-                        const randomChar = activeCharacters[Math.floor(Math.random() * activeCharacters.length)];
-                        const cell = arena.querySelector(`[data-owner-id='${randomChar.id}']`);
-                        if (cell) { cell.classList.add('roulette-active'); lastHighlight = cell; }
-                        if (++count > 20) {
-                            clearInterval(interval);
-                            if (lastHighlight) lastHighlight.classList.remove('roulette-active');
-                            resolve();
-                        }
-                    }, 150);
-                });
+            // Allow time for client-side animations to play
+            await new Promise(resolve => setTimeout(resolve, 3000));
 
+            if (gameData.gameState === 'selecting_attacker') {
                 const attacker = activeCharacters[Math.floor(Math.random() * activeCharacters.length)];
                 await updateDoc(gameRef, { 
                     currentDuel: { attackerId: attacker.id },
@@ -701,25 +693,10 @@
 
                 if (neighbors.length === 0) {
                      await updateDoc(gameRef, { gameState: 'selecting_attacker', message: `${attacker.name} non ha bersagli! Si ricomincia.` });
-                     isAnimating = false;
+                     isLogicRunning = false; // Reset for next attempt
                      return;
                 }
                 
-                await new Promise(resolve => { // Target animation
-                    let count = 0, lastHighlight = null;
-                    const interval = setInterval(() => {
-                        if (lastHighlight) lastHighlight.classList.remove('target-highlighted');
-                        const randomTarget = neighbors[Math.floor(Math.random() * neighbors.length)];
-                        const targetCell = arena.querySelector(`[data-index='${randomTarget.cellIndex}']`);
-                        if (targetCell) { targetCell.classList.add('target-highlighted'); lastHighlight = targetCell; }
-                        if (++count > 15) {
-                            clearInterval(interval);
-                            if (lastHighlight) lastHighlight.classList.remove('target-highlighted');
-                            resolve();
-                        }
-                    }, 150);
-                });
-
                 const defender = neighbors[Math.floor(Math.random() * neighbors.length)].owner;
                  await updateDoc(gameRef, {
                     'currentDuel.defenderId': defender.id,
@@ -730,7 +707,52 @@
                 });
                 startVoteTimerOnHost(gameData.hostId);
             }
-            isAnimating = false;
+            // Reset the flag after a short delay to prevent race conditions
+            setTimeout(() => { isLogicRunning = false; }, 500);
+        };
+
+        const displaySelectionAnimation = (gameData) => {
+            clearInterval(animationInterval); // Clear any previous animations
+            
+            const activeCharacters = gameData.characters.filter(c => !gameData.eliminated.some(e => e.id === c.id));
+            if (activeCharacters.length === 0) return;
+
+            if (gameData.gameState === 'selecting_attacker') {
+                let lastHighlight = null;
+                animationInterval = setInterval(() => {
+                    if (lastHighlight) lastHighlight.classList.remove('roulette-active');
+                    const randomChar = activeCharacters[Math.floor(Math.random() * activeCharacters.length)];
+                    const cell = arena.querySelector(`[data-owner-id='${randomChar.id}']`);
+                    if (cell) { 
+                        cell.classList.add('roulette-active');
+                        lastHighlight = cell;
+                    }
+                }, 150);
+            } else if (gameData.gameState === 'selecting_defender' && gameData.currentDuel?.attackerId) {
+                const attacker = activeCharacters.find(c => c.id === gameData.currentDuel.attackerId);
+                if (!attacker) return;
+                const neighbors = getValidNeighbors(attacker, gameData);
+                if (neighbors.length === 0) return;
+
+                let lastHighlight = null;
+                animationInterval = setInterval(() => {
+                    if (lastHighlight) lastHighlight.classList.remove('target-highlighted');
+                    const randomTarget = neighbors[Math.floor(Math.random() * neighbors.length)];
+                    const targetCell = arena.querySelector(`[data-index='${randomTarget.cellIndex}']`);
+                    if (targetCell) { 
+                        targetCell.classList.add('target-highlighted');
+                        lastHighlight = targetCell;
+                    }
+                }, 150);
+            }
+            
+            // Stop the animation after a bit, before the host makes the actual selection
+            setTimeout(() => {
+                clearInterval(animationInterval);
+                document.querySelectorAll('.roulette-active, .target-highlighted').forEach(el => {
+                    el.classList.remove('roulette-active', 'target-highlighted');
+                });
+            }, 2800);
         };
 
         const startVoteTimerOnHost = (hostId) => {
