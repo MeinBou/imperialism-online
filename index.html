@@ -167,6 +167,82 @@
             margin: 20px auto;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Chat Styles */
+        #chat-toggle-btn {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 101;
+            width: 80px;
+            height: 50px;
+        }
+        #chat-container {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            width: 350px;
+            height: 400px;
+            background-color: var(--surface-color);
+            border: 2px solid var(--primary-color);
+            border-radius: 15px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+            transform: translateY(110%);
+            opacity: 0;
+            pointer-events: none;
+        }
+        #chat-container.open {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: all;
+        }
+        #chat-header {
+            padding: 10px;
+            background-color: var(--bg-color);
+            border-bottom: 1px solid var(--border-color);
+            text-align: center;
+            font-family: var(--font-title);
+        }
+        #chat-messages {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-message {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            border-radius: 10px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        .chat-message.sent {
+            background-color: var(--primary-color);
+            color: #fff;
+            align-self: flex-end;
+        }
+        .chat-message.received {
+            background-color: var(--bg-color);
+            align-self: flex-start;
+        }
+        .chat-sender {
+            font-size: 0.8em;
+            font-weight: bold;
+            margin-bottom: 4px;
+            color: var(--warning-color);
+        }
+        .chat-input-container {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid var(--border-color);
+        }
+        #chat-input { flex-grow: 1; margin-right: 10px; }
+        #chat-send-btn { font-size: 0.9rem; padding: 10px; }
+
     </style>
 </head>
 <body>
@@ -240,6 +316,18 @@
         <div id="arena-container">
             <div id="arena"></div>
         </div>
+        
+        <!-- Chat UI -->
+        <div id="chat-container">
+            <div id="chat-header">Chat di Gioco</div>
+            <div id="chat-messages"></div>
+            <div class="chat-input-container">
+                <input type="text" id="chat-input" placeholder="Scrivi un messaggio...">
+                <button id="chat-send-btn" class="btn-primary">Invia</button>
+            </div>
+        </div>
+        <button id="chat-toggle-btn" class="btn-secondary">Chat</button>
+
     </div>
     
     <!-- Modale del Voto -->
@@ -299,7 +387,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, deleteDoc, runTransaction } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, deleteDoc, runTransaction, addDoc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
         
         const firebaseConfig = {
             apiKey: "AIzaSyAu6Yy9B_VFAek56ZI35lznAlLzRv0G4pY",
@@ -359,10 +447,18 @@
         const messageOverlay = document.getElementById('message-overlay');
         const messageText = document.getElementById('message-text');
 
+        // Chat DOM References
+        const chatContainer = document.getElementById('chat-container');
+        const chatToggleBtn = document.getElementById('chat-toggle-btn');
+        const chatMessages = document.getElementById('chat-messages');
+        const chatInput = document.getElementById('chat-input');
+        const chatSendBtn = document.getElementById('chat-send-btn');
+
         // --- STATO LOCALE ---
         let currentUser = null;
         let currentGameId = null;
         let unsubFromGame = null;
+        let unsubFromChat = null;
         let panzoom;
         let localTimers = [];
         let localRoster = [];
@@ -372,6 +468,13 @@
         const showScreen = (screenId) => {
             screens.forEach(s => s.classList.remove('active'));
             document.getElementById(screenId).classList.add('active');
+            
+            // Show/hide chat based on screen
+            const isGameScreen = screenId === 'game-screen';
+            chatToggleBtn.style.display = isGameScreen ? 'block' : 'none';
+            if (!isGameScreen) {
+                chatContainer.classList.remove('open');
+            }
         };
 
         const showMessage = (text, duration = 3000) => {
@@ -417,7 +520,7 @@
                 return;
             }
 
-            const charId = Date.now().toString();
+            const charId = Date.now().toString() + Math.random(); // Make ID more unique
             localRoster.push({ id: charId, name, imgSrc });
             
             charNameInput.value = '';
@@ -456,7 +559,7 @@
             const judgeName = playerNameInput.value.trim();
             if (!judgeName || !currentUser) {
                 showMessage("Inserisci il tuo nome da giudice per continuare.", 2000);
-                showScreen('home-screen'); // Go back if name is missing
+                showScreen('home-screen');
                 return;
             }
             if (localRoster.length < 4) return;
@@ -465,17 +568,11 @@
             const gameId = generateGameId();
             const gameRef = doc(db, "games", gameId);
 
-            const characters = localRoster.map(char => ({
-                ...char,
-                territories: [],
-                eliminations: 0,
-            }));
-
             const initialGameState = {
                 gameId: gameId,
                 hostId: currentUser.uid,
                 judges: [{ uid: currentUser.uid, name: judgeName }],
-                characters: characters,
+                characters: localRoster, // Use the host's created roster
                 eliminated: [],
                 gameState: "lobby",
                 message: `Benvenuto nella lobby! In attesa che l'host inizi la partita.`
@@ -529,6 +626,7 @@
             localStorage.setItem('playerName', judgeName);
             showScreen('lobby-screen');
             listenToGameUpdates(gameId);
+            listenToChatUpdates(gameId); // Start listening to chat
         };
 
         const leaveGame = async () => {
@@ -543,10 +641,9 @@
                 }
                 let gameData = gameDoc.data();
 
-                // If host leaves, delete the game
                 if (gameData.hostId === currentUser.uid) {
                     await deleteDoc(gameRef);
-                } else { // If a judge leaves
+                } else {
                     let judges = gameData.judges.filter(p => p.uid !== currentUser.uid);
                     await updateDoc(gameRef, { judges });
                 }
@@ -605,9 +702,7 @@
                     showScreen('game-screen');
                     showMessage(gameData.message, 0);
                     updateArena(gameData);
-                    // Avvia l'animazione visiva per tutti i client
                     displaySelectionAnimation(gameData);
-                    // L'host gestisce la logica di selezione
                     if (isHost) {
                         handleRoundLogic(gameData);
                     }
@@ -639,7 +734,6 @@
 
         const handleStartGame = async () => {
             if (!currentGameId || !currentUser) return;
-
             const gameRef = doc(db, "games", currentGameId);
             const gameDoc = await getDoc(gameRef);
             if (!gameDoc.exists()) return;
@@ -663,7 +757,9 @@
             });
             
             setTimeout(() => {
-                updateDoc(gameRef, { gameState: 'selecting_attacker', message: "Inizio Round!" });
+                if (currentUser.uid === gameData.hostId) {
+                    updateDoc(gameRef, { gameState: 'selecting_attacker', message: "Inizio Round!" });
+                }
             }, 3000);
         };
         
@@ -674,9 +770,8 @@
             isLogicRunning = true;
 
             const gameRef = doc(db, "games", currentGameId);
-            const activeCharacters = gameData.characters.filter(c => !gameData.eliminated.some(e => e.id === c.id));
+            const activeCharacters = gameData.characters.filter(c => c.territories.length > 0);
             
-            // Allow time for client-side animations to play
             await new Promise(resolve => setTimeout(resolve, 3000));
 
             if (gameData.gameState === 'selecting_attacker') {
@@ -693,7 +788,7 @@
 
                 if (neighbors.length === 0) {
                      await updateDoc(gameRef, { gameState: 'selecting_attacker', message: `${attacker.name} non ha bersagli! Si ricomincia.` });
-                     isLogicRunning = false; // Reset for next attempt
+                     isLogicRunning = false;
                      return;
                 }
                 
@@ -707,14 +802,13 @@
                 });
                 startVoteTimerOnHost(gameData.hostId);
             }
-            // Reset the flag after a short delay to prevent race conditions
             setTimeout(() => { isLogicRunning = false; }, 500);
         };
 
         const displaySelectionAnimation = (gameData) => {
-            clearInterval(animationInterval); // Clear any previous animations
+            clearInterval(animationInterval);
             
-            const activeCharacters = gameData.characters.filter(c => !gameData.eliminated.some(e => e.id === c.id));
+            const activeCharacters = gameData.characters.filter(c => c.territories.length > 0);
             if (activeCharacters.length === 0) return;
 
             if (gameData.gameState === 'selecting_attacker') {
@@ -746,7 +840,6 @@
                 }, 150);
             }
             
-            // Stop the animation after a bit, before the host makes the actual selection
             setTimeout(() => {
                 clearInterval(animationInterval);
                 document.querySelectorAll('.roulette-active, .target-highlighted').forEach(el => {
@@ -757,7 +850,7 @@
 
         const startVoteTimerOnHost = (hostId) => {
             if (currentUser.uid !== hostId) return;
-            setTimeout(resolveDuel, 31000); // 31 sec buffer
+            setTimeout(resolveDuel, 31000);
         };
         
         const castVote = async (winnerId) => {
@@ -788,29 +881,28 @@
                     let winnerId, loserId;
                     if (voteCounts[attackerId] > voteCounts[defenderId]) { [winnerId, loserId] = [attackerId, defenderId]; }
                     else if (voteCounts[defenderId] > voteCounts[attackerId]) { [winnerId, loserId] = [defenderId, attackerId]; }
-                    else { // Tie-break
+                    else {
                         winnerId = Math.random() < 0.5 ? attackerId : defenderId;
                         loserId = winnerId === attackerId ? defenderId : attackerId;
                     }
                     
-                    let characters = gameData.characters;
-                    let winnerData = characters.find(c => c.id === winnerId);
-                    let loserData = characters.find(c => c.id === loserId);
+                    let characters = [...gameData.characters];
+                    const winnerIndex = characters.findIndex(c => c.id === winnerId);
+                    const loserIndex = characters.findIndex(c => c.id === loserId);
 
-                    winnerData.eliminations = (winnerData.eliminations || 0) + 1;
-                    winnerData.territories.push(...loserData.territories);
-                    loserData.territories = [];
+                    characters[winnerIndex].eliminations = (characters[winnerIndex].eliminations || 0) + 1;
+                    characters[winnerIndex].territories.push(...characters[loserIndex].territories);
+                    characters[loserIndex].territories = [];
 
                     let eliminated = gameData.eliminated;
-                    eliminated.push({ ...loserData, eliminatedBy: winnerData.name });
+                    eliminated.push({ ...characters[loserIndex], eliminatedBy: characters[winnerIndex].name });
                     
-                    const updatedCharacters = characters.map(c => c.id === winnerId ? winnerData : c);
-                    const activeCharacters = updatedCharacters.filter(c => !eliminated.some(e => e.id === c.id));
+                    const activeCharacters = characters.filter(c => c.territories.length > 0);
                     
-                    const message = `${winnerData.name} ha sconfitto ${loserData.name}!`;
+                    const message = `${characters[winnerIndex].name} ha sconfitto ${characters[loserIndex].name}!`;
 
                     const finalUpdate = {
-                        characters: updatedCharacters,
+                        characters: characters,
                         eliminated,
                         message,
                         'currentDuel.winnerId': winnerId,
@@ -826,7 +918,6 @@
                     }
                     transaction.update(gameRef, finalUpdate);
                 });
-
             } catch(error) {
                 console.error("Error resolving duel:", error);
             }
@@ -834,11 +925,13 @@
         
         const handleRevealSequence = async (gameData) => {
             const isHost = currentUser.uid === gameData.hostId;
-            const { winnerId, loserId, voteCounts, attackerId } = gameData.currentDuel;
+            const { winnerId, loserId, voteCounts } = gameData.currentDuel;
+            if (!winnerId || !loserId) return;
 
             const allChars = [...gameData.characters, ...gameData.eliminated];
             const winner = allChars.find(c => c.id === winnerId);
             const loser = allChars.find(c => c.id === loserId);
+            if(!winner || !loser) return;
             
             if (gameData.gameState === 'reveal_winner') {
                 voteModal.style.display = 'flex';
@@ -879,7 +972,7 @@
             arena.style.gridTemplateColumns = `repeat(${gameData.cols}, 100px)`;
             const grid = new Array(gameData.cols * gameData.rows).fill(null);
             
-            const activeChars = gameData.characters.filter(c => !gameData.eliminated.some(e => e.id === c.id));
+            const activeChars = gameData.characters.filter(c => c.territories.length > 0);
             activeChars.forEach(char => {
                 char.territories.forEach(index => { grid[index] = char; });
             });
@@ -907,8 +1000,7 @@
         const updateArena = (gameData) => {
             document.querySelectorAll('.attacker-selected, .target-highlighted').forEach(el => el.classList.remove('attacker-selected', 'target-highlighted'));
             
-            const allChars = [...gameData.characters, ...gameData.eliminated];
-            const activeChars = gameData.characters.filter(c => !gameData.eliminated.some(e => e.id === c.id));
+            const activeChars = gameData.characters.filter(c => c.territories.length > 0);
 
             arena.querySelectorAll('.character-cell').forEach(cell => {
                 const owner = activeChars.find(c => c.territories.includes(parseInt(cell.dataset.index)));
@@ -921,7 +1013,7 @@
                     }
                     cell.style.opacity = 1;
                 } else {
-                    cell.style.opacity = 0.3; // Fade out eliminated
+                    cell.style.opacity = 0.3;
                 }
             });
 
@@ -933,11 +1025,21 @@
 
         const showVoteModal = (gameData) => {
              const { attackerId, defenderId, votes, voteDeadline } = gameData.currentDuel;
+             if (!attackerId || !defenderId) {
+                console.error("Duel data incomplete:", gameData.currentDuel);
+                showMessage("Errore: Sfidanti non validi.", 3000);
+                return;
+             }
+             
              const allChars = [...gameData.characters, ...gameData.eliminated];
              const attacker = allChars.find(c => c.id === attackerId);
              const defender = allChars.find(c => c.id === defenderId);
 
-             if (!attacker || !defender) return;
+             if (!attacker || !defender) {
+                console.error("Could not find attacker or defender from IDs.", { attackerId, defenderId });
+                showMessage("Errore: Dati sfidanti non trovati.", 3000);
+                return;
+             }
             
              attackerInfo.innerHTML = `<img src="${attacker.imgSrc}"><h3>${attacker.name}</h3>`;
              defenderInfo.innerHTML = `<img src="${defender.imgSrc}"><h3>${defender.name}</h3>`;
@@ -966,10 +1068,10 @@
         };
         
         const displayResults = (gameData) => {
-            const winner = gameData.characters.find(c => !gameData.eliminated.some(e => e.id === c.id));
+            const winner = gameData.characters.find(c => c.territories.length > 0);
             winnerAnnouncement.textContent = `IL VINCITORE È ${winner.name}!`;
 
-            const finalRankings = [winner, ...gameData.eliminated.reverse()];
+            const finalRankings = [winner, ...[...gameData.eliminated].reverse()];
             
             finalRankingTableBody.innerHTML = '';
             finalRankings.forEach((char, i) => {
@@ -993,7 +1095,7 @@
                 
                 await updateDoc(gameRef, {
                     gameState: 'lobby',
-                    characters: localRoster, // Use the original roster
+                    characters: localRoster, // Use the original roster from host's memory
                     eliminated: [],
                     currentDuel: null,
                     judges: gameData.judges
@@ -1004,13 +1106,62 @@
              }
         };
 
+        // --- CHAT FUNCTIONS ---
+        const listenToChatUpdates = (gameId) => {
+            if (unsubFromChat) unsubFromChat();
+            const chatRef = collection(db, "games", gameId, "chat");
+            const q = query(chatRef, orderBy("timestamp"));
+
+            unsubFromChat = onSnapshot(q, (snapshot) => {
+                chatMessages.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const msg = doc.data();
+                    const msgDiv = document.createElement('div');
+                    msgDiv.classList.add('chat-message');
+                    msgDiv.classList.add(msg.uid === currentUser.uid ? 'sent' : 'received');
+                    
+                    let senderHTML = '';
+                    if (msg.uid !== currentUser.uid) {
+                        senderHTML = `<div class="chat-sender">${msg.senderName}</div>`;
+                    }
+                    
+                    msgDiv.innerHTML = `${senderHTML}<div>${msg.text}</div>`;
+                    chatMessages.appendChild(msgDiv);
+                });
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            });
+        };
+
+        const sendChatMessage = async () => {
+            const text = chatInput.value.trim();
+            if (text === '' || !currentGameId || !currentUser) return;
+
+            const name = localStorage.getItem('playerName') || 'Giudice';
+            const chatRef = collection(db, "games", currentGameId, "chat");
+            
+            try {
+                await addDoc(chatRef, {
+                    uid: currentUser.uid,
+                    senderName: name,
+                    text: text,
+                    timestamp: serverTimestamp()
+                });
+                chatInput.value = '';
+            } catch (error) {
+                console.error("Error sending message:", error);
+                showMessage("Impossibile inviare il messaggio.", 2000);
+            }
+        };
+
 
         // --- FUNZIONI DI UTILITÀ ---
         const resetLocalState = () => {
              if (unsubFromGame) unsubFromGame();
+             if (unsubFromChat) unsubFromChat();
              unsubFromGame = null;
+             unsubFromChat = null;
              currentGameId = null;
-             isAnimating = false;
+             isLogicRunning = false;
              localRoster = [];
              clearLocalTimers();
              showScreen('home-screen');
@@ -1028,8 +1179,8 @@
 
         const getValidNeighbors = (character, gameData) => {
             const neighbors = [];
-            const { cols, rows } = gameData;
-            const activeChars = gameData.characters.filter(c => !gameData.eliminated.some(e => e.id === c.id));
+            const { cols } = gameData;
+            const activeChars = gameData.characters.filter(c => c.territories.length > 0);
 
             character.territories.forEach(index => {
                 const x = index % cols;
@@ -1037,12 +1188,10 @@
                 [{ dx: -1, dy: 0 }, { dx: 1, dy: 0 }, { dx: 0, dy: -1 }, { dx: 0, dy: 1 }].forEach(dir => {
                     const newX = x + dir.dx;
                     const newY = y + dir.dy;
-                    if (newX >= 0 && newX < cols && newY >= 0 && newY < rows) {
-                        const neighborIndex = newY * cols + newX;
-                        const owner = activeChars.find(c => c.territories.includes(neighborIndex));
-                        if (owner && owner.id !== character.id && !neighbors.some(n => n.owner.id === owner.id)) {
-                            neighbors.push({ owner, cellIndex: neighborIndex });
-                        }
+                    const neighborIndex = newY * cols + newX;
+                    const owner = activeChars.find(c => c.territories.includes(neighborIndex));
+                    if (owner && owner.id !== character.id && !neighbors.some(n => n.owner.id === owner.id)) {
+                        neighbors.push({ owner, cellIndex: neighborIndex });
                     }
                 });
             });
@@ -1079,6 +1228,14 @@
                 showMessage('Codice copiato!', 1500);
              });
         });
+
+        // Chat Event Listeners
+        chatToggleBtn.addEventListener('click', () => chatContainer.classList.toggle('open'));
+        chatSendBtn.addEventListener('click', sendChatMessage);
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendChatMessage();
+        });
+
 
         // --- Inizializzazione ---
         playerNameInput.value = localStorage.getItem('playerName') || '';
