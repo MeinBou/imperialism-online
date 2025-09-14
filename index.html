@@ -62,7 +62,7 @@
         }
         .form-group { margin-bottom: 20px; }
         label { display: block; margin-bottom: 8px; font-weight: bold; }
-        input[type="number"], input[type="text"] {
+        input[type="number"], input[type="text"], input[type="url"] {
             width: 100%;
             padding: 12px;
             background-color: var(--bg-color);
@@ -105,6 +105,14 @@
         #player-list li { background: var(--bg-color); padding: 10px; border-radius: 5px; margin-bottom: 5px; }
         #player-list .host-tag { font-size: 0.8em; color: var(--primary-color); margin-left: 8px; }
         
+        /* Roster Screen */
+        #roster-list { max-height: 30vh; overflow-y: auto; margin-top: 15px; background-color: var(--bg-color); padding: 10px; border-radius: 8px;}
+        .roster-item { display: flex; align-items: center; justify-content: space-between; padding: 8px; border-bottom: 1px solid var(--border-color); }
+        .roster-item:last-child { border-bottom: none; }
+        .roster-item img { width: 40px; height: 40px; border-radius: 50%; margin-right: 15px; object-fit: cover;}
+        .roster-item span { flex-grow: 1; }
+        .roster-item button { padding: 5px 10px; font-size: 0.8rem; background-color: var(--danger-color); color: white; }
+
         /* Game Screen */
         #game-screen { width: 100vw; height: 100vh; padding: 0; }
         #arena-container { width: 100%; height: 100%; overflow: hidden; cursor: grab; }
@@ -129,17 +137,19 @@
         .vs { font-family: var(--font-title); font-size: 4rem; color: var(--danger-color); text-shadow: 0 0 10px var(--danger-color); }
         .vote-actions { display: flex; justify-content: center; gap: 20px; margin-top: 30px; }
         .vote-btn { width: 180px; }
-        .vote-btn .vote-count { background: rgba(0,0,0,0.5); border-radius: 50%; padding: 5px 10px; position: absolute; top: -10px; right: -10px; font-size: 1rem; }
         #vote-timer { font-size: 2rem; margin-top: 15px; color: var(--warning-color); font-family: var(--font-title); }
-        
+        .reveal-section { display: none; margin-top: 20px; }
+        .reveal-section h2 { font-size: 3rem; }
+        .reveal-section p { font-size: 1.5rem; }
+        .winner-reveal { color: var(--success-color); }
+        .loser-reveal { color: var(--danger-color); }
+
         /* Results Screen */
         #results-screen .container { max-width: 800px; }
-        .ranking-tables { display: flex; justify-content: space-around; gap: 30px; margin-top: 20px; flex-wrap: wrap; }
-        .ranking-table { flex: 1; min-width: 300px; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
-        th { font-family: var(--font-title); color: var(--primary-color); }
-        .rank-img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 10px; vertical-align: middle; }
+        #final-ranking-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        #final-ranking-table th, #final-ranking-table td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        #final-ranking-table th { font-family: var(--font-title); color: var(--primary-color); }
+        #final-ranking-table .rank-img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 10px; vertical-align: middle; }
         
         /* Message Overlay */
         #message-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: transparent; z-index: 1000; display: flex; justify-content: center; align-items: flex-end; text-align: center; padding: 20px; padding-bottom: 50px; pointer-events: none; }
@@ -157,7 +167,6 @@
             margin: 20px auto;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
     </style>
 </head>
 <body>
@@ -166,13 +175,13 @@
     <div id="home-screen" class="screen active">
         <div class="container">
             <h1>Imperialism Online</h1>
-            <p style="text-align: center; margin-bottom: 20px;">Crea una partita e invita i tuoi amici, o unisciti a una partita esistente!</p>
+            <p style="text-align: center; margin-bottom: 20px;">Crea una partita e invita i tuoi amici a votare, o unisciti a una partita come giudice!</p>
             <div class="form-group">
-                <label for="player-name">Il tuo nome:</label>
-                <input type="text" id="player-name" placeholder="Super Giocatore" maxlength="20">
+                <label for="player-name">Il tuo nome (giudice):</label>
+                <input type="text" id="player-name" placeholder="Super Giudice" maxlength="20">
             </div>
             <div class="button-group">
-                <button id="create-game-btn" class="btn-primary">Crea Partita</button>
+                <button id="show-roster-config-btn" class="btn-primary">Crea Partita</button>
             </div>
             <hr style="margin: 20px 0; border-color: var(--border-color);">
             <div class="form-group">
@@ -180,7 +189,30 @@
                 <input type="text" id="join-code" placeholder="ABCDE" maxlength="5">
             </div>
             <div class="button-group">
-                <button id="join-game-btn" class="btn-secondary">Unisciti alla Partita</button>
+                <button id="join-game-btn" class="btn-secondary">Unisciti come Giudice</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Schermata Configurazione Roster (solo Host) -->
+    <div id="roster-config-screen" class="screen">
+        <div class="container">
+            <h1>Configura Roster</h1>
+            <p>Aggiungi da 4 a 100 personaggi per la sfida.</p>
+            <div class="form-group">
+                <label for="char-name">Nome Personaggio:</label>
+                <input type="text" id="char-name" placeholder="Es. Son Goku">
+            </div>
+            <div class="form-group">
+                <label for="char-img">URL Immagine (PNG/JPG):</label>
+                <input type="url" id="char-img" placeholder="https://.../goku.png">
+            </div>
+            <button id="add-char-btn" class="btn-secondary">Aggiungi Personaggio</button>
+            <div id="roster-list"></div>
+            <p id="char-counter" style="text-align: center; margin-top: 10px;">Personaggi: 0/100</p>
+            <div class="button-group">
+                <button id="create-lobby-btn" class="btn-primary" disabled>Crea Lobby (Min. 4)</button>
+                 <button id="back-to-home-btn" class="btn-danger">Annulla</button>
             </div>
         </div>
     </div>
@@ -189,14 +221,13 @@
     <div id="lobby-screen" class="screen">
         <div class="container">
             <h1>Lobby di Gioco</h1>
-            <p>Condividi questo codice con i tuoi amici:</p>
+            <p>Condividi questo codice con i tuoi amici (giudici):</p>
             <div id="game-code-display" class="game-code-display" title="Clicca per copiare">CARICAMENTO...</div>
-            <h2 style="margin-top: 20px;">Giocatori Connessi:</h2>
+            <h2 style="margin-top: 20px;">Giudici Connessi:</h2>
             <ul id="player-list"></ul>
-            <div id="loading-spinner" class="spinner" style="display: none;"></div>
             <div class="button-group">
-                <button id="start-game-btn" class="btn-primary">Inizia Partita (Min. 2)</button>
-                <button id="leave-lobby-btn" class="btn-danger">Esci dalla Lobby</button>
+                <button id="start-game-btn" class="btn-primary">Inizia Lotta!</button>
+                <button id="leave-lobby-btn" class="btn-danger">Chiudi Lobby</button>
             </div>
         </div>
     </div>
@@ -214,15 +245,27 @@
     <!-- Modale del Voto -->
     <div id="vote-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
-            <h2>La Sfida!</h2>
-            <div class="duel-container">
-                <div id="attacker-info" class="combatant"></div>
-                <div class="vs">VS</div>
-                <div id="defender-info" class="combatant"></div>
+            <div id="vote-view">
+                <h2>La Sfida!</h2>
+                <div class="duel-container">
+                    <div id="attacker-info" class="combatant"></div>
+                    <div class="vs">VS</div>
+                    <div id="defender-info" class="combatant"></div>
+                </div>
+                <h3>Chi vincerà? Vota!</h3>
+                <div id="vote-actions" class="vote-actions"></div>
+                <div id="vote-timer">30</div>
             </div>
-            <h3>Chi vincerà? Vota!</h3>
-            <div id="vote-actions" class="vote-actions"></div>
-            <div id="vote-timer">20</div>
+            <div id="reveal-view" style="display: none;">
+                <div id="winner-reveal" class="reveal-section winner-reveal">
+                    <h2>SALVO!</h2>
+                    <p id="winner-reveal-text"></p>
+                </div>
+                <div id="loser-reveal" class="reveal-section loser-reveal">
+                    <h2>ELIMINATO!</h2>
+                    <p id="loser-reveal-text"></p>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -230,25 +273,20 @@
     <div id="results-screen" class="screen">
         <div class="container">
             <h1 id="winner-announcement"></h1>
-            <div class="ranking-tables">
-                <div class="ranking-table">
-                    <h2>Classifica Piazzamenti</h2>
-                    <table id="placement-table">
-                        <thead><tr><th>#</th><th>Personaggio</th><th>Eliminato da</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-                <div class="ranking-table">
-                    <h2>Classifica Uccisioni</h2>
-                    <table id="kills-table">
-                        <thead><tr><th>Personaggio</th><th>Uccisioni</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
+            <h2>Classifica Finale</h2>
+            <table id="final-ranking-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Personaggio</th>
+                        <th>Uccisioni</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
             <div class="button-group">
                 <button id="rematch-btn" class="btn-primary">Rivincita!</button>
-                <button id="new-game-btn" class="btn-secondary">Torna alla Home</button>
+                <button id="new-game-btn" class="btn-secondary">Nuova Partita</button>
             </div>
         </div>
     </div>
@@ -259,12 +297,10 @@
     </div>
 
     <script type="module">
-        // Importa le funzioni di Firebase
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, deleteDoc, runTransaction } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
         
-        // --- CONFIGURAZIONE FIREBASE ---
         const firebaseConfig = {
             apiKey: "AIzaSyAu6Yy9B_VFAek56ZI35lznAlLzRv0G4pY",
             authDomain: "imperialism-online.firebaseapp.com",
@@ -281,15 +317,18 @@
 
         // --- RIFERIMENTI DOM ---
         const screens = document.querySelectorAll('.screen');
-        const homeScreen = document.getElementById('home-screen');
-        const lobbyScreen = document.getElementById('lobby-screen');
-        const gameScreen = document.getElementById('game-screen');
-        const resultsScreen = document.getElementById('results-screen');
-
         const playerNameInput = document.getElementById('player-name');
-        const createGameBtn = document.getElementById('create-game-btn');
+        const showRosterConfigBtn = document.getElementById('show-roster-config-btn');
         const joinCodeInput = document.getElementById('join-code');
         const joinGameBtn = document.getElementById('join-game-btn');
+        const backToHomeBtn = document.getElementById('back-to-home-btn');
+
+        const charNameInput = document.getElementById('char-name');
+        const charImgInput = document.getElementById('char-img');
+        const addCharBtn = document.getElementById('add-char-btn');
+        const rosterList = document.getElementById('roster-list');
+        const charCounter = document.getElementById('char-counter');
+        const createLobbyBtn = document.getElementById('create-lobby-btn');
         
         const gameCodeDisplay = document.getElementById('game-code-display');
         const playerList = document.getElementById('player-list');
@@ -301,14 +340,19 @@
         const leaveGameBtn = document.getElementById('leave-game-btn');
 
         const voteModal = document.getElementById('vote-modal');
+        const voteView = document.getElementById('vote-view');
+        const revealView = document.getElementById('reveal-view');
         const attackerInfo = document.getElementById('attacker-info');
         const defenderInfo = document.getElementById('defender-info');
         const voteActions = document.getElementById('vote-actions');
         const voteTimer = document.getElementById('vote-timer');
+        const winnerReveal = document.getElementById('winner-reveal');
+        const loserReveal = document.getElementById('loser-reveal');
+        const winnerRevealText = document.getElementById('winner-reveal-text');
+        const loserRevealText = document.getElementById('loser-reveal-text');
 
         const winnerAnnouncement = document.getElementById('winner-announcement');
-        const placementTableBody = document.querySelector('#placement-table tbody');
-        const killsTableBody = document.querySelector('#kills-table tbody');
+        const finalRankingTableBody = document.querySelector('#final-ranking-table tbody');
         const rematchBtn = document.getElementById('rematch-btn');
         const newGameBtn = document.getElementById('new-game-btn');
 
@@ -321,6 +365,7 @@
         let unsubFromGame = null;
         let panzoom;
         let localTimers = [];
+        let localRoster = [];
 
         // --- FUNZIONI DI NAVIGAZIONE E UI ---
         const showScreen = (screenId) => {
@@ -346,51 +391,110 @@
             if (user) {
                 currentUser = user;
             } else {
-                signInAnonymously(auth).catch(error => console.error("Errore di accesso anonimo:", error));
+                signInAnonymously(auth).catch(error => console.error("Anonymous sign-in error:", error));
             }
         });
+        
+        // --- CONFIGURAZIONE ROSTER (HOST) ---
+        const handleAddCharacter = () => {
+            const name = charNameInput.value.trim();
+            const imgSrc = charImgInput.value.trim();
 
-        // --- LOGICA DELLA LOBBY ---
-        const createGame = async () => {
-            const playerName = playerNameInput.value.trim();
-            if (!playerName || !currentUser) {
-                showMessage("Per favore, inserisci il tuo nome.", 2000);
+            if (!name || !imgSrc) {
+                showMessage("Inserisci nome e URL dell'immagine.", 2000);
+                return;
+            }
+            if (localRoster.length >= 100) {
+                showMessage("Hai raggiunto il limite di 100 personaggi.", 2000);
                 return;
             }
 
-            createGameBtn.disabled = true;
+            try {
+                new URL(imgSrc); // Basic URL validation
+            } catch (_) {
+                showMessage("L'URL dell'immagine non è valido.", 2000);
+                return;
+            }
+
+            const charId = Date.now().toString();
+            localRoster.push({ id: charId, name, imgSrc });
+            
+            charNameInput.value = '';
+            charImgInput.value = '';
+            charNameInput.focus();
+            
+            updateRosterUI();
+        };
+
+        const handleRemoveCharacter = (charId) => {
+            localRoster = localRoster.filter(c => c.id !== charId);
+            updateRosterUI();
+        };
+
+        const updateRosterUI = () => {
+            rosterList.innerHTML = '';
+            localRoster.forEach(char => {
+                const item = document.createElement('div');
+                item.className = 'roster-item';
+                item.innerHTML = `
+                    <img src="${char.imgSrc}" alt="${char.name}" onerror="this.style.display='none'">
+                    <span>${char.name}</span>
+                    <button data-char-id="${char.id}">Rimuovi</button>
+                `;
+                item.querySelector('button').addEventListener('click', () => handleRemoveCharacter(char.id));
+                rosterList.appendChild(item);
+            });
+            
+            const count = localRoster.length;
+            charCounter.textContent = `Personaggi: ${count}/100`;
+            createLobbyBtn.disabled = count < 4;
+        };
+        
+        // --- LOGICA DELLA LOBBY ---
+        const createGameFromRoster = async () => {
+            const judgeName = playerNameInput.value.trim();
+            if (!judgeName || !currentUser) {
+                showMessage("Inserisci il tuo nome da giudice per continuare.", 2000);
+                showScreen('home-screen'); // Go back if name is missing
+                return;
+            }
+            if (localRoster.length < 4) return;
+
+            createLobbyBtn.disabled = true;
             const gameId = generateGameId();
             const gameRef = doc(db, "games", gameId);
+
+            const characters = localRoster.map(char => ({
+                ...char,
+                territories: [],
+                eliminations: 0,
+            }));
 
             const initialGameState = {
                 gameId: gameId,
                 hostId: currentUser.uid,
-                players: [{ uid: currentUser.uid, name: playerName }],
-                characters: [],
+                judges: [{ uid: currentUser.uid, name: judgeName }],
+                characters: characters,
                 eliminated: [],
-                gameState: "lobby", // Stati: lobby, starting, selecting_attacker, selecting_defender, voting, round_end, finished
-                gridSize: 0,
-                cols: 0,
-                rows: 0,
-                currentDuel: null,
+                gameState: "lobby",
                 message: `Benvenuto nella lobby! In attesa che l'host inizi la partita.`
             };
 
             try {
                 await setDoc(gameRef, initialGameState);
-                joinLobby(gameId, playerName);
+                joinLobby(gameId, judgeName);
             } catch (error) {
-                console.error("Errore nella creazione della partita:", error);
+                console.error("Error creating game:", error);
                 showMessage("Impossibile creare la partita. Riprova.", 3000);
-                createGameBtn.disabled = false;
+                createLobbyBtn.disabled = false;
             }
         };
 
         const joinGame = async () => {
-            const playerName = playerNameInput.value.trim();
+            const judgeName = playerNameInput.value.trim();
             const gameId = joinCodeInput.value.trim().toUpperCase();
-            if (!playerName || !gameId || !currentUser) {
-                showMessage("Per favore, inserisci nome e codice partita.", 2000);
+            if (!judgeName || !gameId || !currentUser) {
+                showMessage("Inserisci il tuo nome e il codice partita.", 2000);
                 return;
             }
 
@@ -400,60 +504,53 @@
             try {
                  await runTransaction(db, async (transaction) => {
                     const gameDoc = await transaction.get(gameRef);
-                    if (!gameDoc.exists()) {
-                        throw "Partita non trovata!";
-                    }
+                    if (!gameDoc.exists()) throw "Partita non trovata!";
 
                     const gameData = gameDoc.data();
-                    if (gameData.gameState !== 'lobby') {
-                        throw "La partita è già iniziata!";
-                    }
+                    if (gameData.gameState !== 'lobby') throw "La partita è già iniziata!";
 
-                    const players = gameData.players;
-                    if (!players.some(p => p.uid === currentUser.uid)) {
-                        players.push({ uid: currentUser.uid, name: playerName });
+                    const judges = gameData.judges;
+                    if (!judges.some(p => p.uid === currentUser.uid)) {
+                        judges.push({ uid: currentUser.uid, name: judgeName });
                     }
-                    transaction.update(gameRef, { players });
+                    transaction.update(gameRef, { judges });
                 });
-                joinLobby(gameId, playerName);
+                joinLobby(gameId, judgeName);
             } catch (error) {
-                console.error("Errore nell'unirsi alla partita:", error);
+                console.error("Error joining game:", error);
                 showMessage("Impossibile unirsi: " + error, 3000);
                 joinGameBtn.disabled = false;
             }
         };
 
-        const joinLobby = (gameId, playerName) => {
+        const joinLobby = (gameId, judgeName) => {
             currentGameId = gameId;
-            localStorage.setItem('playerName', playerName);
+            localStorage.setItem('playerName', judgeName);
             showScreen('lobby-screen');
             listenToGameUpdates(gameId);
         };
 
-        const leaveLobby = async () => {
+        const leaveGame = async () => {
              if (!currentGameId || !currentUser) return;
              
              const gameRef = doc(db, "games", currentGameId);
              try {
-                await runTransaction(db, async (transaction) => {
-                    const gameDoc = await transaction.get(gameRef);
-                    if (!gameDoc.exists()) return;
+                const gameDoc = await getDoc(gameRef);
+                if (!gameDoc.exists()) {
+                    resetLocalState();
+                    return;
+                }
+                let gameData = gameDoc.data();
 
-                    let gameData = gameDoc.data();
-                    let players = gameData.players.filter(p => p.uid !== currentUser.uid);
-                    
-                    if (players.length === 0) {
-                        transaction.delete(gameRef);
-                    } else {
-                        // Se l'host se ne va, assegna un nuovo host
-                        if (gameData.hostId === currentUser.uid) {
-                            gameData.hostId = players[0].uid;
-                        }
-                        transaction.update(gameRef, { players: players, hostId: gameData.hostId });
-                    }
-                });
+                // If host leaves, delete the game
+                if (gameData.hostId === currentUser.uid) {
+                    await deleteDoc(gameRef);
+                } else { // If a judge leaves
+                    let judges = gameData.judges.filter(p => p.uid !== currentUser.uid);
+                    await updateDoc(gameRef, { judges });
+                }
              } catch (error) {
-                 console.error("Errore nell'uscire dalla partita: ", error);
+                 console.error("Error leaving game: ", error);
              } finally {
                  resetLocalState();
              }
@@ -475,15 +572,16 @@
         };
 
         const updateUI = (gameData) => {
-             // Aggiorna la lobby
+            const isHost = currentUser && currentUser.uid === gameData.hostId;
+
             if (gameData.gameState === 'lobby') {
                 showScreen('lobby-screen');
                 gameCodeDisplay.textContent = gameData.gameId;
                 playerList.innerHTML = '';
-                gameData.players.forEach(player => {
+                gameData.judges.forEach(judge => {
                     const li = document.createElement('li');
-                    li.textContent = player.name;
-                    if (player.uid === gameData.hostId) {
+                    li.textContent = judge.name;
+                    if (judge.uid === gameData.hostId) {
                         const hostTag = document.createElement('span');
                         hostTag.className = 'host-tag';
                         hostTag.textContent = '(Host)';
@@ -491,15 +589,14 @@
                     }
                     playerList.appendChild(li);
                 });
-                startGameBtn.disabled = gameData.players.length < 2 || currentUser.uid !== gameData.hostId;
-                rematchBtn.disabled = currentUser.uid !== gameData.hostId;
+                startGameBtn.style.display = isHost ? 'block' : 'none';
+                leaveLobbyBtn.textContent = isHost ? 'Chiudi Lobby' : 'Esci dalla Lobby';
             }
             
-            // Gestione transizioni di stato
             switch(gameData.gameState) {
                 case 'starting':
                     showScreen('game-screen');
-                    showMessage("La partita sta iniziando...", 0);
+                    showMessage("La lotta sta per iniziare...", 0);
                     createArena(gameData);
                     break;
                 case 'selecting_attacker':
@@ -507,8 +604,7 @@
                     showScreen('game-screen');
                     showMessage(gameData.message, 0);
                     updateArena(gameData);
-                    // L'host gestisce le animazioni
-                    if (currentUser.uid === gameData.hostId) {
+                    if (isHost) {
                         handleRoundAnimations(gameData);
                     }
                     break;
@@ -518,18 +614,21 @@
                     showMessage(`È ora di votare!`, 0);
                     showVoteModal(gameData);
                     break;
+                case 'reveal_winner':
+                case 'reveal_loser':
                 case 'round_end':
                      showScreen('game-screen');
-                     if(voteModal.style.display === 'flex') voteModal.style.display = 'none';
-                     showMessage(gameData.message, 3000);
+                     showMessage(gameData.message, 4000);
                      updateArena(gameData);
+                     handleRevealSequence(gameData);
                      clearLocalTimers();
                      break;
                 case 'finished':
                     showScreen('results-screen');
-                    if (unsubFromGame) unsubFromGame(); // Smettiamo di ascoltare
+                    if (unsubFromGame) unsubFromGame();
                     unsubFromGame = null;
                     displayResults(gameData);
+                    rematchBtn.style.display = isHost ? 'block' : 'none';
                     break;
             }
         };
@@ -540,25 +639,14 @@
             const gameRef = doc(db, "games", currentGameId);
             const gameDoc = await getDoc(gameRef);
             if (!gameDoc.exists()) return;
+            
             const gameData = gameDoc.data();
-            const players = gameData.players;
-
-            // Crea personaggi semplici basati sui giocatori
-            const characters = players.map((player, index) => ({
-                id: player.uid,
-                name: player.name,
-                imgSrc: `https://placehold.co/100x100/${getRandomColor(true)}/ffffff?text=${player.name.charAt(0)}`,
-                color: getRandomColor(),
-                territories: [],
-                eliminations: 0,
-            }));
-
-            const shuffledCharacters = shuffleArray([...characters]);
+            const shuffledCharacters = shuffleArray([...gameData.characters]);
             shuffledCharacters.forEach((char, index) => {
                 char.territories = [index];
             });
 
-            const gridSize = characters.length;
+            const gridSize = shuffledCharacters.length;
             const ratio = window.innerWidth / window.innerHeight;
             const cols = Math.ceil(Math.sqrt(gridSize * ratio));
             const rows = Math.ceil(gridSize / cols);
@@ -566,45 +654,34 @@
             await updateDoc(gameRef, {
                 gameState: 'starting',
                 characters: shuffledCharacters,
-                eliminated: [],
-                gridSize,
-                cols,
-                rows,
+                gridSize, cols, rows,
                 message: 'La partita sta per iniziare...'
             });
             
-            // Dopo un breve ritardo, inizia il primo round
             setTimeout(() => {
                 updateDoc(gameRef, { gameState: 'selecting_attacker', message: "Inizio Round!" });
             }, 3000);
         };
         
-        // --- LOGICA DI GIOCO (gestita dall'host) ---
+        // --- LOGICA DI GIOCO ---
         let isAnimating = false;
         const handleRoundAnimations = async (gameData) => {
             if (isAnimating) return;
             isAnimating = true;
 
             const gameRef = doc(db, "games", currentGameId);
-
+            const activeCharacters = gameData.characters.filter(c => !gameData.eliminated.some(e => e.id === c.id));
+            
             if (gameData.gameState === 'selecting_attacker') {
-                const activeCharacters = gameData.characters;
-                
-                // Animazione Roulette
-                await new Promise(resolve => {
-                    let rouletteCount = 0;
-                    let lastHighlight = null;
-                    const rouletteInterval = setInterval(() => {
+                await new Promise(resolve => { // Roulette animation
+                    let count = 0, lastHighlight = null;
+                    const interval = setInterval(() => {
                         if (lastHighlight) lastHighlight.classList.remove('roulette-active');
                         const randomChar = activeCharacters[Math.floor(Math.random() * activeCharacters.length)];
                         const cell = arena.querySelector(`[data-owner-id='${randomChar.id}']`);
-                        if (cell) {
-                            cell.classList.add('roulette-active');
-                            lastHighlight = cell;
-                        }
-                        rouletteCount++;
-                        if (rouletteCount > 20) {
-                            clearInterval(rouletteInterval);
+                        if (cell) { cell.classList.add('roulette-active'); lastHighlight = cell; }
+                        if (++count > 20) {
+                            clearInterval(interval);
                             if (lastHighlight) lastHighlight.classList.remove('roulette-active');
                             resolve();
                         }
@@ -613,38 +690,30 @@
 
                 const attacker = activeCharacters[Math.floor(Math.random() * activeCharacters.length)];
                 await updateDoc(gameRef, { 
-                    'currentDuel.attackerId': attacker.id,
+                    currentDuel: { attackerId: attacker.id },
                     gameState: 'selecting_defender',
                     message: `${attacker.name} si prepara ad attaccare!`
                 });
+
             } else if (gameData.gameState === 'selecting_defender' && gameData.currentDuel.attackerId) {
-                const attacker = gameData.characters.find(c => c.id === gameData.currentDuel.attackerId);
+                const attacker = activeCharacters.find(c => c.id === gameData.currentDuel.attackerId);
                 const neighbors = getValidNeighbors(attacker, gameData);
 
                 if (neighbors.length === 0) {
-                     await updateDoc(gameRef, { 
-                        gameState: 'selecting_attacker', 
-                        message: `${attacker.name} non ha bersagli! Si ricomincia.`
-                    });
-                    isAnimating = false;
-                    return;
+                     await updateDoc(gameRef, { gameState: 'selecting_attacker', message: `${attacker.name} non ha bersagli! Si ricomincia.` });
+                     isAnimating = false;
+                     return;
                 }
                 
-                // Animazione Bersaglio
-                await new Promise(resolve => {
-                    let targetCount = 0;
-                    let lastHighlight = null;
-                    const targetInterval = setInterval(() => {
+                await new Promise(resolve => { // Target animation
+                    let count = 0, lastHighlight = null;
+                    const interval = setInterval(() => {
                         if (lastHighlight) lastHighlight.classList.remove('target-highlighted');
                         const randomTarget = neighbors[Math.floor(Math.random() * neighbors.length)];
                         const targetCell = arena.querySelector(`[data-index='${randomTarget.cellIndex}']`);
-                        if (targetCell) {
-                            targetCell.classList.add('target-highlighted');
-                            lastHighlight = targetCell;
-                        }
-                        targetCount++;
-                        if (targetCount > 15) {
-                            clearInterval(targetInterval);
+                        if (targetCell) { targetCell.classList.add('target-highlighted'); lastHighlight = targetCell; }
+                        if (++count > 15) {
+                            clearInterval(interval);
                             if (lastHighlight) lastHighlight.classList.remove('target-highlighted');
                             resolve();
                         }
@@ -655,30 +724,23 @@
                  await updateDoc(gameRef, {
                     'currentDuel.defenderId': defender.id,
                     'currentDuel.votes': {},
+                    'currentDuel.voteDeadline': Date.now() + 30000,
                     gameState: 'voting',
                     message: `${attacker.name} attacca ${defender.name}!`
                 });
-                startVoteTimerOnHost(gameData);
+                startVoteTimerOnHost(gameData.hostId);
             }
             isAnimating = false;
         };
 
-        const startVoteTimerOnHost = (gameData) => {
-            let timeLeft = 20;
-            const timerInterval = setInterval(async () => {
-                timeLeft--;
-                if (timeLeft <= 0) {
-                    clearInterval(timerInterval);
-                    await resolveDuel();
-                }
-            }, 1000);
-            localTimers.push(timerInterval);
+        const startVoteTimerOnHost = (hostId) => {
+            if (currentUser.uid !== hostId) return;
+            setTimeout(resolveDuel, 31000); // 31 sec buffer
         };
         
         const castVote = async (winnerId) => {
             if (!currentGameId || !currentUser) return;
-            const voteBtn = document.querySelector(`.vote-btn[data-winner-id="${winnerId}"]`);
-            if (voteBtn) voteBtn.disabled = true; // Disabilita subito per feedback
+            document.querySelectorAll('.vote-btn').forEach(b => b.disabled = true);
             
             const gameRef = doc(db, "games", currentGameId);
             const votePath = `currentDuel.votes.${currentUser.uid}`;
@@ -692,27 +754,19 @@
             try {
                 await runTransaction(db, async (transaction) => {
                     const gameDoc = await transaction.get(gameRef);
-                    if (!gameDoc.exists()) throw "Partita non trovata.";
+                    if (!gameDoc.exists()) throw "Game not found.";
                     let gameData = gameDoc.data();
 
-                    if(gameData.gameState !== 'voting') return; // Qualcuno l'ha già risolto
+                    if(gameData.gameState !== 'voting') return;
                     
                     const { attackerId, defenderId, votes } = gameData.currentDuel;
                     const voteCounts = { [attackerId]: 0, [defenderId]: 0 };
-                    
-                    for (const voterId in votes) {
-                        voteCounts[votes[voterId]]++;
-                    }
+                    Object.values(votes || {}).forEach(vote => voteCounts[vote]++);
 
                     let winnerId, loserId;
-                    if (voteCounts[attackerId] > voteCounts[defenderId]) {
-                        winnerId = attackerId;
-                        loserId = defenderId;
-                    } else if (voteCounts[defenderId] > voteCounts[attackerId]) {
-                        winnerId = defenderId;
-                        loserId = attackerId;
-                    } else {
-                        // Pareggio, sceglie casualmente
+                    if (voteCounts[attackerId] > voteCounts[defenderId]) { [winnerId, loserId] = [attackerId, defenderId]; }
+                    else if (voteCounts[defenderId] > voteCounts[attackerId]) { [winnerId, loserId] = [defenderId, attackerId]; }
+                    else { // Tie-break
                         winnerId = Math.random() < 0.5 ? attackerId : defenderId;
                         loserId = winnerId === attackerId ? defenderId : attackerId;
                     }
@@ -721,42 +775,79 @@
                     let winnerData = characters.find(c => c.id === winnerId);
                     let loserData = characters.find(c => c.id === loserId);
 
-                    winnerData.eliminations++;
+                    winnerData.eliminations = (winnerData.eliminations || 0) + 1;
                     winnerData.territories.push(...loserData.territories);
+                    loserData.territories = [];
 
                     let eliminated = gameData.eliminated;
                     eliminated.push({ ...loserData, eliminatedBy: winnerData.name });
-                    characters = characters.filter(c => c.id !== loserId);
+                    
+                    const updatedCharacters = characters.map(c => c.id === winnerId ? winnerData : c);
+                    const activeCharacters = updatedCharacters.filter(c => !eliminated.some(e => e.id === c.id));
                     
                     const message = `${winnerData.name} ha sconfitto ${loserData.name}!`;
 
-                    if (characters.length <= 1) {
-                         transaction.update(gameRef, {
-                            gameState: 'finished',
-                            characters,
-                            eliminated,
-                            message: `La partita è finita! Il vincitore è ${characters[0].name}!`
-                        });
+                    const finalUpdate = {
+                        characters: updatedCharacters,
+                        eliminated,
+                        message,
+                        'currentDuel.winnerId': winnerId,
+                        'currentDuel.loserId': loserId,
+                        'currentDuel.voteCounts': voteCounts,
+                    };
+
+                    if (activeCharacters.length <= 1) {
+                        finalUpdate.gameState = 'finished';
+                        finalUpdate.message = `La partita è finita! Il vincitore è ${activeCharacters[0].name}!`;
                     } else {
-                         transaction.update(gameRef, {
-                            gameState: 'round_end',
-                            characters,
-                            eliminated,
-                            currentDuel: null,
-                            message
-                        });
-                        
-                        // Pianifica il prossimo round (lo farà il client dell'host)
-                        setTimeout(() => {
-                            if (currentUser.uid === gameData.hostId) {
-                                updateDoc(gameRef, { gameState: 'selecting_attacker', message: 'Inizio nuovo round!' });
-                            }
-                        }, 4000);
+                        finalUpdate.gameState = 'reveal_winner';
                     }
+                    transaction.update(gameRef, finalUpdate);
                 });
 
             } catch(error) {
-                console.error("Errore nella risoluzione del duello:", error);
+                console.error("Error resolving duel:", error);
+            }
+        };
+        
+        const handleRevealSequence = async (gameData) => {
+            const isHost = currentUser.uid === gameData.hostId;
+            const { winnerId, loserId, voteCounts, attackerId } = gameData.currentDuel;
+
+            const allChars = [...gameData.characters, ...gameData.eliminated];
+            const winner = allChars.find(c => c.id === winnerId);
+            const loser = allChars.find(c => c.id === loserId);
+            
+            if (gameData.gameState === 'reveal_winner') {
+                voteModal.style.display = 'flex';
+                voteView.style.display = 'none';
+                revealView.style.display = 'block';
+                winnerRevealText.textContent = `${winner.name} con ${voteCounts[winnerId]} voti`;
+                winnerReveal.style.display = 'block';
+                loserReveal.style.display = 'none';
+
+                if (isHost) {
+                    setTimeout(() => {
+                        updateDoc(doc(db, "games", currentGameId), { gameState: 'reveal_loser' });
+                    }, 2500);
+                }
+            } else if (gameData.gameState === 'reveal_loser') {
+                voteModal.style.display = 'flex';
+                loserRevealText.textContent = `${loser.name} con ${voteCounts[loserId]} voti`;
+                loserReveal.style.display = 'block';
+
+                if (isHost) {
+                    setTimeout(() => {
+                        updateDoc(doc(db, "games", currentGameId), { gameState: 'round_end' });
+                    }, 2500);
+                }
+            } else if (gameData.gameState === 'round_end') {
+                voteModal.style.display = 'none';
+                 if (isHost) {
+                    setTimeout(() => {
+                        updateDoc(doc(db, "games", currentGameId), { gameState: 'selecting_attacker', message: 'Inizio nuovo round!', currentDuel: null });
+                    }, 2000);
+                }
             }
         };
 
@@ -766,20 +857,19 @@
             arena.style.gridTemplateColumns = `repeat(${gameData.cols}, 100px)`;
             const grid = new Array(gameData.cols * gameData.rows).fill(null);
             
-            gameData.characters.forEach(char => {
-                char.territories.forEach(index => {
-                    grid[index] = char;
-                });
+            const activeChars = gameData.characters.filter(c => !gameData.eliminated.some(e => e.id === c.id));
+            activeChars.forEach(char => {
+                char.territories.forEach(index => { grid[index] = char; });
             });
 
             for(let i = 0; i < grid.length; i++) {
                 const character = grid[i];
                 const cell = document.createElement('div');
-                cell.classList.add('character-cell');
+                cell.className = 'character-cell';
                 cell.dataset.index = i;
                 if (character) {
                     cell.dataset.ownerId = character.id;
-                    cell.style.border = `3px solid ${character.color}`;
+                    cell.style.border = `3px solid ${character.color || getRandomColor()}`;
                     cell.innerHTML = `
                         <img src="${character.imgSrc}" alt="${character.name}" onerror="this.src='https://placehold.co/100x100/1a1a1a/444?text=X'">
                         <div class="character-name">${character.name}</div>
@@ -793,21 +883,24 @@
         };
 
         const updateArena = (gameData) => {
-            // Rimuovi vecchi highlight
-            document.querySelectorAll('.attacker-selected, .target-highlighted').forEach(el => {
-                el.classList.remove('attacker-selected', 'target-highlighted');
-            });
+            document.querySelectorAll('.attacker-selected, .target-highlighted').forEach(el => el.classList.remove('attacker-selected', 'target-highlighted'));
             
-            gameData.characters.forEach(character => {
-                character.territories.forEach(index => {
-                    const cell = arena.querySelector(`[data-index='${index}']`);
-                    if (cell && cell.dataset.ownerId !== character.id) {
-                         cell.dataset.ownerId = character.id;
-                         cell.style.borderColor = character.color;
-                         cell.querySelector('img').src = character.imgSrc;
-                         cell.querySelector('.character-name').textContent = character.name;
+            const allChars = [...gameData.characters, ...gameData.eliminated];
+            const activeChars = gameData.characters.filter(c => !gameData.eliminated.some(e => e.id === c.id));
+
+            arena.querySelectorAll('.character-cell').forEach(cell => {
+                const owner = activeChars.find(c => c.territories.includes(parseInt(cell.dataset.index)));
+                if (owner) {
+                    if (cell.dataset.ownerId !== owner.id) {
+                        cell.dataset.ownerId = owner.id;
+                        cell.style.borderColor = owner.color || getRandomColor();
+                        cell.querySelector('img').src = owner.imgSrc;
+                        cell.querySelector('.character-name').textContent = owner.name;
                     }
-                });
+                    cell.style.opacity = 1;
+                } else {
+                    cell.style.opacity = 0.3; // Fade out eliminated
+                }
             });
 
             if (gameData.currentDuel?.attackerId) {
@@ -817,23 +910,18 @@
         };
 
         const showVoteModal = (gameData) => {
-             const { attackerId, defenderId, votes } = gameData.currentDuel;
-             const attacker = gameData.characters.find(c => c.id === attackerId) || gameData.eliminated.find(c => c.id === attackerId);
-             const defender = gameData.characters.find(c => c.id === defenderId) || gameData.eliminated.find(c => c.id === defenderId);
+             const { attackerId, defenderId, votes, voteDeadline } = gameData.currentDuel;
+             const allChars = [...gameData.characters, ...gameData.eliminated];
+             const attacker = allChars.find(c => c.id === attackerId);
+             const defender = allChars.find(c => c.id === defenderId);
 
              if (!attacker || !defender) return;
             
              attackerInfo.innerHTML = `<img src="${attacker.imgSrc}"><h3>${attacker.name}</h3>`;
              defenderInfo.innerHTML = `<img src="${defender.imgSrc}"><h3>${defender.name}</h3>`;
-             
-             const voteCounts = { [attackerId]: 0, [defenderId]: 0 };
-             if(votes) {
-                Object.values(votes).forEach(vote => voteCounts[vote]++);
-             }
-
              voteActions.innerHTML = `
-                <button class="btn-primary vote-btn" data-winner-id="${attackerId}">VOTA ${attacker.name} <span class="vote-count">${voteCounts[attackerId]}</span></button>
-                <button class="btn-primary vote-btn" data-winner-id="${defenderId}">VOTA ${defender.name} <span class="vote-count">${voteCounts[defenderId]}</span></button>
+                <button class="btn-primary vote-btn" data-winner-id="${attackerId}">VOTA ${attacker.name}</button>
+                <button class="btn-primary vote-btn" data-winner-id="${defenderId}">VOTA ${defender.name}</button>
              `;
              
              const hasVoted = votes && votes[currentUser.uid];
@@ -843,34 +931,32 @@
              });
 
              voteModal.style.display = 'flex';
+             voteView.style.display = 'block';
+             revealView.style.display = 'none';
              
              clearLocalTimers();
-             let timeLeft = 20;
-             voteTimer.textContent = timeLeft;
              const timerInterval = setInterval(() => {
-                 timeLeft--;
+                 const timeLeft = Math.max(0, Math.ceil((voteDeadline - Date.now()) / 1000));
                  voteTimer.textContent = timeLeft;
-                 if (timeLeft <= 0) {
-                      clearInterval(timerInterval);
-                      voteModal.style.display = 'none';
-                 }
+                 if (timeLeft <= 0) clearInterval(timerInterval);
              }, 1000);
              localTimers.push(timerInterval);
         };
         
         const displayResults = (gameData) => {
-            const winner = gameData.characters[0];
+            const winner = gameData.characters.find(c => !gameData.eliminated.some(e => e.id === c.id));
             winnerAnnouncement.textContent = `IL VINCITORE È ${winner.name}!`;
 
-            placementTableBody.innerHTML = `<tr><td>1</td><td><img src="${winner.imgSrc}" class="rank-img">${winner.name}</td><td>Vincitore</td></tr>`;
-            [...gameData.eliminated].reverse().forEach((char, i) => {
-                placementTableBody.innerHTML += `<tr><td>${i + 2}</td><td><img src="${char.imgSrc}" class="rank-img">${char.name}</td><td>${char.eliminatedBy}</td></tr>`;
-            });
-
-            const allFighters = [winner, ...gameData.eliminated].sort((a, b) => b.eliminations - a.eliminations);
-            killsTableBody.innerHTML = '';
-            allFighters.forEach(char => {
-                killsTableBody.innerHTML += `<tr><td><img src="${char.imgSrc}" class="rank-img">${char.name}</td><td>${char.eliminations}</td></tr>`;
+            const finalRankings = [winner, ...gameData.eliminated.reverse()];
+            
+            finalRankingTableBody.innerHTML = '';
+            finalRankings.forEach((char, i) => {
+                finalRankingTableBody.innerHTML += `
+                    <tr>
+                        <td>${i + 1}</td>
+                        <td><img src="${char.imgSrc}" class="rank-img">${char.name}</td>
+                        <td>${char.eliminations || 0}</td>
+                    </tr>`;
             });
         };
 
@@ -883,18 +969,16 @@
                 if (!gameDoc.exists()) return;
                 const gameData = gameDoc.data();
                 
-                const newPlayersList = gameData.players.filter(p => [gameData.hostId, ...gameData.characters.map(c => c.id), ...gameData.eliminated.map(e => e.id)].includes(p.uid));
-
                 await updateDoc(gameRef, {
                     gameState: 'lobby',
-                    players: newPlayersList, // Ripristina solo i giocatori che hanno finito
-                    characters: [],
+                    characters: localRoster, // Use the original roster
                     eliminated: [],
-                    currentDuel: null
+                    currentDuel: null,
+                    judges: gameData.judges
                 });
-                listenToGameUpdates(currentGameId); // Riavviamo l'ascolto
+                listenToGameUpdates(currentGameId);
              } catch (error) {
-                 console.error("Errore nella rivincita:", error);
+                 console.error("Error on rematch:", error);
              }
         };
 
@@ -905,6 +989,7 @@
              unsubFromGame = null;
              currentGameId = null;
              isAnimating = false;
+             localRoster = [];
              clearLocalTimers();
              showScreen('home-screen');
         };
@@ -917,27 +1002,22 @@
             }
             return array;
         };
-        const getRandomColor = (forPlaceholder = false) => {
-            const letters = '0123456789ABCDEF';
-            let color = forPlaceholder ? '' : '#';
-            for (let i = 0; i < 6; i++) {
-                color += letters[Math.floor(Math.random() * 16)];
-            }
-            return color;
-        };
+        const getRandomColor = () => `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`;
+
         const getValidNeighbors = (character, gameData) => {
             const neighbors = [];
             const { cols, rows } = gameData;
+            const activeChars = gameData.characters.filter(c => !gameData.eliminated.some(e => e.id === c.id));
+
             character.territories.forEach(index => {
                 const x = index % cols;
                 const y = Math.floor(index / cols);
-                const directions = [{ dx: -1, dy: 0 }, { dx: 1, dy: 0 }, { dx: 0, dy: -1 }, { dx: 0, dy: 1 }];
-                directions.forEach(dir => {
+                [{ dx: -1, dy: 0 }, { dx: 1, dy: 0 }, { dx: 0, dy: -1 }, { dx: 0, dy: 1 }].forEach(dir => {
                     const newX = x + dir.dx;
                     const newY = y + dir.dy;
                     if (newX >= 0 && newX < cols && newY >= 0 && newY < rows) {
                         const neighborIndex = newY * cols + newX;
-                        const owner = gameData.characters.find(c => c.territories.includes(neighborIndex));
+                        const owner = activeChars.find(c => c.territories.includes(neighborIndex));
                         if (owner && owner.id !== character.id && !neighbors.some(n => n.owner.id === owner.id)) {
                             neighbors.push({ owner, cellIndex: neighborIndex });
                         }
@@ -962,11 +1042,14 @@
 
 
         // --- EVENT LISTENERS ---
-        createGameBtn.addEventListener('click', createGame);
+        showRosterConfigBtn.addEventListener('click', () => showScreen('roster-config-screen'));
+        backToHomeBtn.addEventListener('click', () => showScreen('home-screen'));
+        addCharBtn.addEventListener('click', handleAddCharacter);
+        createLobbyBtn.addEventListener('click', createGameFromRoster);
         joinGameBtn.addEventListener('click', joinGame);
-        leaveLobbyBtn.addEventListener('click', leaveLobby);
+        leaveLobbyBtn.addEventListener('click', leaveGame);
         startGameBtn.addEventListener('click', handleStartGame);
-        leaveGameBtn.addEventListener('click', leaveLobby);
+        leaveGameBtn.addEventListener('click', leaveGame);
         rematchBtn.addEventListener('click', handleRematch);
         newGameBtn.addEventListener('click', resetLocalState);
         gameCodeDisplay.addEventListener('click', () => {
@@ -977,6 +1060,7 @@
 
         // --- Inizializzazione ---
         playerNameInput.value = localStorage.getItem('playerName') || '';
+        updateRosterUI();
     </script>
 </body>
 </html>
