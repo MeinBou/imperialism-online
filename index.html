@@ -719,9 +719,6 @@
                     showMessage(gameData.message, 0);
                     updateArena(gameData);
                     displaySelectionAnimation(gameData);
-                    if (isHost) {
-                        handleRoundLogic(gameData);
-                    }
                     break;
                 case 'voting':
                     showScreen('game-screen');
@@ -774,42 +771,62 @@
             
             setTimeout(() => {
                 if (currentUser.uid === gameData.hostId) {
-                    updateDoc(gameRef, { gameState: 'selecting_attacker', message: "Inizio Round!" });
+                    executeRoundTurn();
                 }
             }, 3000);
         };
         
         // --- LOGICA DI GIOCO ---
         let isLogicRunning = false;
-        const handleRoundLogic = async (gameData) => {
-            if (isLogicRunning) return;
+        const executeRoundTurn = async () => {
+            if (isLogicRunning || !currentGameId) return;
             isLogicRunning = true;
+            try {
+                const gameRef = doc(db, "games", currentGameId);
+                let gameDoc = await getDoc(gameRef);
+                if (!gameDoc.exists()) { isLogicRunning = false; return; }
+                let gameData = gameDoc.data();
 
-            const gameRef = doc(db, "games", currentGameId);
-            const activeCharacters = gameData.characters.filter(c => c.territories.length > 0);
-            
-            await new Promise(resolve => setTimeout(resolve, 3000));
+                // --- 1. Find a valid attacker ---
+                let activeCharacters = gameData.characters.filter(c => c.territories.length > 0);
+                let attacker, neighbors;
+                let validAttackerFound = false;
+                let shuffledAttackers = shuffleArray([...activeCharacters]);
 
-            if (gameData.gameState === 'selecting_attacker') {
-                const attacker = activeCharacters[Math.floor(Math.random() * activeCharacters.length)];
-                await updateDoc(gameRef, { 
+                for (const potentialAttacker of shuffledAttackers) {
+                    neighbors = getValidNeighbors(potentialAttacker, gameData);
+                    if (neighbors.length > 0) {
+                        attacker = potentialAttacker;
+                        validAttackerFound = true;
+                        break;
+                    }
+                }
+
+                if (!validAttackerFound) {
+                    await updateDoc(gameRef, { message: "Nessuna mossa valida! Si salta il turno.", gameState: 'round_end' });
+                    setTimeout(() => { if (currentUser.uid === gameData.hostId) executeRoundTurn(); }, 4000);
+                    isLogicRunning = false;
+                    return;
+                }
+
+                // --- 2. Announce attacker and run animation ---
+                await updateDoc(gameRef, {
                     currentDuel: { attackerId: attacker.id },
+                    gameState: 'selecting_attacker',
+                    message: `Scelta dell'attaccante...`
+                });
+                await new Promise(resolve => setTimeout(resolve, 3000));
+
+                // --- 3. Announce defender and run animation ---
+                await updateDoc(gameRef, {
                     gameState: 'selecting_defender',
                     message: `${attacker.name} si prepara ad attaccare!`
                 });
+                await new Promise(resolve => setTimeout(resolve, 3000));
 
-            } else if (gameData.gameState === 'selecting_defender' && gameData.currentDuel.attackerId) {
-                const attacker = activeCharacters.find(c => c.id === gameData.currentDuel.attackerId);
-                const neighbors = getValidNeighbors(attacker, gameData);
-
-                if (neighbors.length === 0) {
-                     await updateDoc(gameRef, { gameState: 'selecting_attacker', message: `${attacker.name} non ha bersagli! Si ricomincia.` });
-                     isLogicRunning = false;
-                     return;
-                }
-                
+                // --- 4. Select defender and start vote ---
                 const defender = neighbors[Math.floor(Math.random() * neighbors.length)].owner;
-                 await updateDoc(gameRef, {
+                await updateDoc(gameRef, {
                     'currentDuel.defenderId': defender.id,
                     'currentDuel.votes': {},
                     'currentDuel.voteDeadline': Date.now() + 30000,
@@ -817,12 +834,17 @@
                     message: `${attacker.name} attacca ${defender.name}!`
                 });
                 startVoteTimerOnHost(gameData.hostId);
+            } catch (error) {
+                console.error("Error in turn execution:", error);
+            } finally {
+                isLogicRunning = false;
             }
-            setTimeout(() => { isLogicRunning = false; }, 500);
         };
+
 
         const displaySelectionAnimation = (gameData) => {
             clearInterval(animationInterval);
+            document.querySelectorAll('.roulette-active, .target-highlighted, .attacker-selected').forEach(el => el.classList.remove('roulette-active', 'target-highlighted', 'attacker-selected'));
             
             const activeCharacters = gameData.characters.filter(c => c.territories.length > 0);
             if (activeCharacters.length === 0) return;
@@ -839,6 +861,9 @@
                     }
                 }, 150);
             } else if (gameData.gameState === 'selecting_defender' && gameData.currentDuel?.attackerId) {
+                const attackerCell = arena.querySelector(`[data-owner-id='${gameData.currentDuel.attackerId}']`);
+                if (attackerCell) attackerCell.classList.add('attacker-selected');
+
                 const attacker = activeCharacters.find(c => c.id === gameData.currentDuel.attackerId);
                 if (!attacker) return;
                 const neighbors = getValidNeighbors(attacker, gameData);
@@ -865,10 +890,7 @@
             
             setTimeout(() => {
                 clearInterval(animationInterval);
-                document.querySelectorAll('.roulette-active, .target-highlighted').forEach(el => {
-                    el.classList.remove('roulette-active', 'target-highlighted');
-                });
-            }, 2800);
+            }, 2900);
         };
 
         const startVoteTimerOnHost = (hostId) => {
@@ -983,7 +1005,7 @@
                 voteModal.style.display = 'none';
                  if (isHost) {
                     setTimeout(() => {
-                        updateDoc(doc(db, "games", currentGameId), { gameState: 'selecting_attacker', message: 'Inizio nuovo round!', currentDuel: null });
+                        executeRoundTurn();
                     }, 2000);
                 }
             }
