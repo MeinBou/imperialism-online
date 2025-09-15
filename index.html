@@ -417,7 +417,7 @@
                 </div>
                 <h3>Chi vincerà? Vota!</h3>
                 <div id="vote-actions" class="vote-actions"></div>
-                <div id="vote-timer">30</div>
+                <div id="vote-timer">15</div>
             </div>
             <div id="reveal-view" style="display: none;">
                 <div id="winner-reveal" class="reveal-section winner-reveal">
@@ -905,7 +905,7 @@
                     if (!currentGameId) return; 
                     updateDoc(gameRef, {
                         'currentDuel.votes': {},
-                        'currentDuel.voteDeadline': Date.now() + 30000,
+                        'currentDuel.voteDeadline': Date.now() + 15000,
                         gameState: 'voting',
                         message: `${attacker.name} attacca ${defender.name}!`
                     });
@@ -985,7 +985,7 @@
         const startVoteTimerOnHost = (hostId) => {
             if (currentUser.uid !== hostId) return;
             clearTimeout(duelResolutionTimer);
-            duelResolutionTimer = setTimeout(resolveDuel, 31000);
+            duelResolutionTimer = setTimeout(resolveDuel, 16000);
         };
         
         const castVote = async (winnerId) => {
