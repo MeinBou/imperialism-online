@@ -143,6 +143,61 @@
         .attacker-selected { box-shadow: 0 0 20px 8px var(--success-color) !important; transform: scale(1.1); z-index: 10; }
         #game-ui-overlay { position: fixed; top: 20px; right: 20px; z-index: 100; }
         
+        /* Temporary Leaderboard */
+        #temp-leaderboard {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            width: 250px;
+            max-height: 60vh;
+            background: rgba(44, 44, 44, 0.85);
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            padding: 15px;
+            z-index: 100;
+            backdrop-filter: blur(3px);
+            overflow-y: auto;
+            color: var(--text-color);
+            display: none;
+        }
+        #temp-leaderboard h3 {
+            font-family: var(--font-title);
+            text-align: center;
+            color: var(--primary-color);
+            margin-bottom: 10px;
+        }
+        #temp-leaderboard-list {
+            list-style: none;
+            padding-left: 0;
+        }
+        .leaderboard-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .leaderboard-item:last-child {
+            border-bottom: none;
+        }
+        .leaderboard-rank {
+            font-family: var(--font-title);
+            font-size: 1.2rem;
+            margin-right: 15px;
+            width: 30px;
+            text-align: center;
+        }
+        .leaderboard-img {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-right: 10px;
+        }
+        .leaderboard-name {
+            flex-grow: 1;
+            font-size: 0.9rem;
+        }
+
         /* Modal Styles */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); display: flex; justify-content: center; align-items: center; z-index: 200; backdrop-filter: blur(5px); }
         .modal-content { background: var(--surface-color); padding: 40px; border-radius: 20px; text-align: center; width: 90%; max-width: 800px; box-shadow: 0 0 40px rgba(0, 170, 255, 0.5); border: 2px solid var(--primary-color); }
@@ -329,6 +384,10 @@
         <div id="game-ui-overlay">
             <button id="leave-game-btn" class="btn-danger">Abbandona</button>
         </div>
+        <div id="temp-leaderboard">
+            <h3>Classifica</h3>
+            <ol id="temp-leaderboard-list"></ol>
+        </div>
         <div id="arena-container">
             <div id="arena"></div>
         </div>
@@ -442,6 +501,8 @@
         const arenaContainer = document.getElementById('arena-container');
         const arena = document.getElementById('arena');
         const leaveGameBtn = document.getElementById('leave-game-btn');
+        const tempLeaderboard = document.getElementById('temp-leaderboard');
+        const tempLeaderboardList = document.getElementById('temp-leaderboard-list');
 
         const voteModal = document.getElementById('vote-modal');
         const voteView = document.getElementById('vote-view');
@@ -479,15 +540,16 @@
         let localTimers = [];
         let localRoster = [];
         let animationInterval = null;
+        let duelResolutionTimer = null;
 
         // --- FUNZIONI DI NAVIGAZIONE E UI ---
         const showScreen = (screenId) => {
             screens.forEach(s => s.classList.remove('active'));
             document.getElementById(screenId).classList.add('active');
             
-            // Show/hide chat based on screen
             const isGameScreen = screenId === 'game-screen';
             chatToggleBtn.style.display = isGameScreen ? 'block' : 'none';
+            tempLeaderboard.style.display = isGameScreen ? 'block' : 'none';
             if (!isGameScreen) {
                 chatContainer.classList.remove('open');
             }
@@ -530,13 +592,13 @@
             }
 
             try {
-                new URL(imgSrc); // Basic URL validation
+                new URL(imgSrc); 
             } catch (_) {
                 showMessage("L'URL dell'immagine non è valido.", 2000);
                 return;
             }
 
-            const charId = Date.now().toString() + Math.random(); // Make ID more unique
+            const charId = Date.now().toString() + Math.random(); 
             localRoster.push({ id: charId, name, imgSrc });
             
             charNameInput.value = '';
@@ -588,7 +650,7 @@
                 gameId: gameId,
                 hostId: currentUser.uid,
                 judges: [{ uid: currentUser.uid, name: judgeName }],
-                characters: localRoster, // Use the host's created roster
+                characters: localRoster, 
                 eliminated: [],
                 gameState: "lobby",
                 message: `Benvenuto nella lobby! In attesa che l'host inizi la partita.`
@@ -642,7 +704,7 @@
             localStorage.setItem('playerName', judgeName);
             showScreen('lobby-screen');
             listenToGameUpdates(gameId);
-            listenToChatUpdates(gameId); // Start listening to chat
+            listenToChatUpdates(gameId); 
         };
 
         const leaveGame = async () => {
@@ -681,6 +743,19 @@
                     return;
                 }
                 const gameData = doc.data();
+                const isHost = currentUser && currentUser.uid === gameData.hostId;
+
+                
+                if (isHost && gameData.gameState === 'voting') {
+                    const votesCount = Object.keys(gameData.currentDuel.votes || {}).length;
+                    const judgesCount = gameData.judges.length;
+                    if (votesCount >= judgesCount) {
+                        clearTimeout(duelResolutionTimer);
+                        resolveDuel();
+                        return; 
+                    }
+                }
+                
                 updateUI(gameData);
             });
         };
@@ -707,14 +782,18 @@
                 leaveLobbyBtn.textContent = isHost ? 'Chiudi Lobby' : 'Esci dalla Lobby';
             }
             
+            // This needs to be called in all in-game states
+            if (['selection_phase', 'voting', 'reveal_winner', 'reveal_loser', 'round_end'].includes(gameData.gameState)) {
+                updateTemporaryLeaderboard(gameData);
+            }
+            
             switch(gameData.gameState) {
                 case 'starting':
                     showScreen('game-screen');
                     showMessage("La lotta sta per iniziare...", 0);
                     createArena(gameData);
                     break;
-                case 'selecting_attacker':
-                case 'selecting_defender':
+                case 'selection_phase':
                     showScreen('game-screen');
                     showMessage(gameData.message, 0);
                     updateArena(gameData);
@@ -787,16 +866,17 @@
                 if (!gameDoc.exists()) { isLogicRunning = false; return; }
                 let gameData = gameDoc.data();
 
-                // --- 1. Find a valid attacker ---
+                
                 let activeCharacters = gameData.characters.filter(c => c.territories.length > 0);
                 let attacker, neighbors;
                 let validAttackerFound = false;
                 let shuffledAttackers = shuffleArray([...activeCharacters]);
 
                 for (const potentialAttacker of shuffledAttackers) {
-                    neighbors = getValidNeighbors(potentialAttacker, gameData);
-                    if (neighbors.length > 0) {
+                    const potentialNeighbors = getValidNeighbors(potentialAttacker, gameData);
+                    if (potentialNeighbors.length > 0) {
                         attacker = potentialAttacker;
+                        neighbors = potentialNeighbors;
                         validAttackerFound = true;
                         break;
                     }
@@ -809,31 +889,29 @@
                     return;
                 }
 
-                // --- 2. Announce attacker and run animation ---
+                const defender = neighbors[Math.floor(Math.random() * neighbors.length)].owner;
+                
                 await updateDoc(gameRef, {
-                    currentDuel: { attackerId: attacker.id },
-                    gameState: 'selecting_attacker',
-                    message: `Scelta dell'attaccante...`
-                });
-                await new Promise(resolve => setTimeout(resolve, 3000));
-
-                // --- 3. Announce defender and run animation ---
-                await updateDoc(gameRef, {
-                    gameState: 'selecting_defender',
+                    gameState: 'selection_phase',
+                    currentDuel: {
+                        attackerId: attacker.id,
+                        defenderId: defender.id,
+                    },
                     message: `${attacker.name} si prepara ad attaccare!`
                 });
-                await new Promise(resolve => setTimeout(resolve, 3000));
 
-                // --- 4. Select defender and start vote ---
-                const defender = neighbors[Math.floor(Math.random() * neighbors.length)].owner;
-                await updateDoc(gameRef, {
-                    'currentDuel.defenderId': defender.id,
-                    'currentDuel.votes': {},
-                    'currentDuel.voteDeadline': Date.now() + 30000,
-                    gameState: 'voting',
-                    message: `${attacker.name} attacca ${defender.name}!`
-                });
-                startVoteTimerOnHost(gameData.hostId);
+                
+                setTimeout(() => {
+                    if (!currentGameId) return; 
+                    updateDoc(gameRef, {
+                        'currentDuel.votes': {},
+                        'currentDuel.voteDeadline': Date.now() + 30000,
+                        gameState: 'voting',
+                        message: `${attacker.name} attacca ${defender.name}!`
+                    });
+                    startVoteTimerOnHost(gameData.hostId);
+                }, 6000); 
+
             } catch (error) {
                 console.error("Error in turn execution:", error);
             } finally {
@@ -846,56 +924,68 @@
             clearInterval(animationInterval);
             document.querySelectorAll('.roulette-active, .target-highlighted, .attacker-selected').forEach(el => el.classList.remove('roulette-active', 'target-highlighted', 'attacker-selected'));
             
+            if (gameData.gameState !== 'selection_phase' || !gameData.currentDuel) return;
+
+            const { attackerId } = gameData.currentDuel;
+            if (!attackerId) return;
+
             const activeCharacters = gameData.characters.filter(c => c.territories.length > 0);
-            if (activeCharacters.length === 0) return;
 
-            if (gameData.gameState === 'selecting_attacker') {
-                let lastHighlight = null;
-                animationInterval = setInterval(() => {
-                    if (lastHighlight) lastHighlight.classList.remove('roulette-active');
-                    const randomChar = activeCharacters[Math.floor(Math.random() * activeCharacters.length)];
-                    const cell = arena.querySelector(`[data-owner-id='${randomChar.id}']`);
-                    if (cell) { 
-                        cell.classList.add('roulette-active');
-                        lastHighlight = cell;
-                    }
-                }, 150);
-            } else if (gameData.gameState === 'selecting_defender' && gameData.currentDuel?.attackerId) {
-                const attackerCell = arena.querySelector(`[data-owner-id='${gameData.currentDuel.attackerId}']`);
-                if (attackerCell) attackerCell.classList.add('attacker-selected');
-
-                const attacker = activeCharacters.find(c => c.id === gameData.currentDuel.attackerId);
-                if (!attacker) return;
-                const neighbors = getValidNeighbors(attacker, gameData);
-                if (neighbors.length === 0) return;
-
-                if (neighbors.length === 1) {
-                    const targetCell = arena.querySelector(`[data-index='${neighbors[0].cellIndex}']`);
-                    if (targetCell) { 
-                        targetCell.classList.add('target-highlighted');
-                    }
-                } else {
-                    let lastHighlight = null;
-                    animationInterval = setInterval(() => {
-                        if (lastHighlight) lastHighlight.classList.remove('target-highlighted');
-                        const randomTarget = neighbors[Math.floor(Math.random() * neighbors.length)];
-                        const targetCell = arena.querySelector(`[data-index='${randomTarget.cellIndex}']`);
-                        if (targetCell) { 
-                            targetCell.classList.add('target-highlighted');
-                            lastHighlight = targetCell;
-                        }
-                    }, 150);
-                }
-            }
             
-            setTimeout(() => {
-                clearInterval(animationInterval);
-            }, 2900);
+            let lastHighlight = null;
+            let rouletteCount = 0;
+            animationInterval = setInterval(() => {
+                if (lastHighlight) lastHighlight.classList.remove('roulette-active');
+                const randomChar = activeCharacters[Math.floor(Math.random() * activeCharacters.length)];
+                const cell = arena.querySelector(`[data-owner-id='${randomChar.id}']`);
+                if (cell) { 
+                    cell.classList.add('roulette-active');
+                    lastHighlight = cell;
+                }
+                rouletteCount++;
+                if(rouletteCount > 18) { // ~2.7 seconds
+                    clearInterval(animationInterval);
+                    if (lastHighlight) lastHighlight.classList.remove('roulette-active');
+                    
+                    
+                    const attackerCell = arena.querySelector(`[data-owner-id='${attackerId}']`);
+                    if (attackerCell) attackerCell.classList.add('attacker-selected');
+
+                    
+                    const attacker = activeCharacters.find(c => c.id === attackerId);
+                    if (!attacker) return;
+                    const neighbors = getValidNeighbors(attacker, gameData);
+                    if (neighbors.length > 0) {
+                        let lastTargetHighlight = null;
+                        let targetCount = 0;
+                        animationInterval = setInterval(() => {
+                            if (lastTargetHighlight) lastTargetHighlight.classList.remove('target-highlighted');
+                            if (neighbors.length === 1) {
+                                const targetCell = arena.querySelector(`[data-index='${neighbors[0].cellIndex}']`);
+                                if (targetCell) targetCell.classList.add('target-highlighted');
+                            } else {
+                                const randomTarget = neighbors[Math.floor(Math.random() * neighbors.length)];
+                                const targetCell = arena.querySelector(`[data-index='${randomTarget.cellIndex}']`);
+                                if (targetCell) { 
+                                    targetCell.classList.add('target-highlighted');
+                                    lastTargetHighlight = targetCell;
+                                }
+                            }
+                            targetCount++;
+                            if(targetCount > 18) { // ~2.7 seconds
+                                clearInterval(animationInterval);
+                                if(lastTargetHighlight) lastTargetHighlight.classList.remove('target-highlighted');
+                            }
+                        }, 150);
+                    }
+                }
+            }, 150);
         };
 
         const startVoteTimerOnHost = (hostId) => {
             if (currentUser.uid !== hostId) return;
-            setTimeout(resolveDuel, 31000);
+            clearTimeout(duelResolutionTimer);
+            duelResolutionTimer = setTimeout(resolveDuel, 31000);
         };
         
         const castVote = async (winnerId) => {
@@ -1068,6 +1158,27 @@
             }
         };
 
+        const updateTemporaryLeaderboard = (gameData) => {
+            if (!gameData.characters) return;
+
+            const totalCharacters = gameData.characters.length;
+            const eliminatedList = gameData.eliminated || [];
+
+            tempLeaderboardList.innerHTML = ''; 
+
+            eliminatedList.forEach((char, index) => {
+                const rank = totalCharacters - index;
+                const li = document.createElement('li');
+                li.className = 'leaderboard-item';
+                li.innerHTML = `
+                    <span class="leaderboard-rank">${rank}</span>
+                    <img src="${char.imgSrc}" class="leaderboard-img" alt="${char.name}">
+                    <span class="leaderboard-name">${char.name}</span>
+                `;
+                tempLeaderboardList.appendChild(li);
+            });
+        };
+
         const showVoteModal = (gameData) => {
              const { attackerId, defenderId, votes, voteDeadline } = gameData.currentDuel;
              if (!attackerId || !defenderId) {
@@ -1140,7 +1251,7 @@
                 
                 await updateDoc(gameRef, {
                     gameState: 'lobby',
-                    characters: localRoster, // Use the original roster from host's memory
+                    characters: localRoster, 
                     eliminated: [],
                     currentDuel: null,
                     judges: gameData.judges
