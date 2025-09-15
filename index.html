@@ -106,12 +106,61 @@
         #player-list .host-tag { font-size: 0.8em; color: var(--primary-color); margin-left: 8px; }
         
         /* Roster Screen */
-        #roster-list { max-height: 30vh; overflow-y: auto; margin-top: 15px; background-color: var(--bg-color); padding: 10px; border-radius: 8px;}
+        .view-toggle { display: flex; gap: 10px; margin-bottom: 15px; }
+        .view-toggle button { flex: 1; font-size: 0.9rem; padding: 10px; }
+        .view-toggle button.active { background-color: var(--primary-color); color: white; }
+
+        #roster-list { max-height: 25vh; overflow-y: auto; margin-top: 15px; background-color: var(--bg-color); padding: 10px; border-radius: 8px;}
         .roster-item { display: flex; align-items: center; justify-content: space-between; padding: 8px; border-bottom: 1px solid var(--border-color); }
         .roster-item:last-child { border-bottom: none; }
         .roster-item img { width: 40px; height: 40px; border-radius: 50%; margin-right: 15px; object-fit: cover;}
         .roster-item span { flex-grow: 1; }
         .roster-item button { padding: 5px 10px; font-size: 0.8rem; background-color: var(--danger-color); color: white; }
+
+        #predefined-roster-view { display: none; }
+        #predefined-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 15px;
+            max-height: 30vh;
+            overflow-y: auto;
+            padding: 10px;
+            background-color: var(--bg-color);
+            border-radius: 8px;
+        }
+        .predefined-char {
+            cursor: pointer;
+            position: relative;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid transparent;
+            transition: transform 0.2s;
+        }
+        .predefined-char:hover {
+            transform: scale(1.05);
+            border-color: var(--primary-color);
+        }
+        .predefined-char img {
+            width: 100%;
+            display: block;
+            aspect-ratio: 1 / 1;
+            object-fit: cover;
+        }
+        .predefined-char.added {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .predefined-char.added::after {
+            content: '✔';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2.5rem;
+            color: var(--success-color);
+            text-shadow: 0 0 5px black;
+        }
+
 
         /* Game Screen */
         #game-screen { width: 100vw; height: 100vh; padding: 0; }
@@ -345,16 +394,32 @@
     <div id="roster-config-screen" class="screen">
         <div class="container">
             <h1>Configura Roster</h1>
-            <p>Aggiungi da 4 a 100 personaggi per la sfida.</p>
-            <div class="form-group">
-                <label for="char-name">Nome Personaggio:</label>
-                <input type="text" id="char-name" placeholder="Es. Son Goku">
+            
+            <div class="view-toggle">
+                <button id="show-custom-btn" class="btn-secondary active">Aggiungi con Link</button>
+                <button id="show-predefined-btn" class="btn-secondary">Scegli dal Roster</button>
             </div>
-            <div class="form-group">
-                <label for="char-img">URL Immagine (PNG/JPG):</label>
-                <input type="url" id="char-img" placeholder="https://.../goku.png">
+
+            <div id="custom-add-view">
+                <p>Aggiungi personaggi con nome e URL dell'immagine.</p>
+                <div class="form-group">
+                    <label for="char-name">Nome Personaggio:</label>
+                    <input type="text" id="char-name" placeholder="Es. Son Goku">
+                </div>
+                <div class="form-group">
+                    <label for="char-img">URL Immagine (PNG/JPG):</label>
+                    <input type="url" id="char-img" placeholder="https://.../goku.png">
+                </div>
+                <button id="add-char-btn" class="btn-secondary">Aggiungi Personaggio</button>
             </div>
-            <button id="add-char-btn" class="btn-secondary">Aggiungi Personaggio</button>
+
+            <div id="predefined-roster-view">
+                 <p>Clicca su un personaggio per aggiungerlo alla partita.</p>
+                 <div id="predefined-grid"></div>
+            </div>
+
+
+            <h2 style="margin-top: 20px;">Personaggi Aggiunti</h2>
             <div id="roster-list"></div>
             <p id="char-counter" style="text-align: center; margin-top: 10px;">Personaggi: 0/100</p>
             <div class="button-group">
@@ -492,6 +557,11 @@
         const rosterList = document.getElementById('roster-list');
         const charCounter = document.getElementById('char-counter');
         const createLobbyBtn = document.getElementById('create-lobby-btn');
+        const showCustomBtn = document.getElementById('show-custom-btn');
+        const showPredefinedBtn = document.getElementById('show-predefined-btn');
+        const customAddView = document.getElementById('custom-add-view');
+        const predefinedRosterView = document.getElementById('predefined-roster-view');
+        const predefinedGrid = document.getElementById('predefined-grid');
         
         const gameCodeDisplay = document.getElementById('game-code-display');
         const playerList = document.getElementById('player-list');
@@ -541,6 +611,153 @@
         let localRoster = [];
         let animationInterval = null;
         let duelResolutionTimer = null;
+        const predefinedRoster = [
+            { name: "Aang", imgSrc: "https://i.pinimg.com/736x/05/01/fc/0501fc8ed44f7bd4ad9e74d9bb959669.jpg" },
+            { name: "Ada Wong", imgSrc: "https://i.pinimg.com/736x/19/ca/67/19ca678bedd73e74380204b75852e476.jpg" },
+            { name: "Aladdin", imgSrc: "https://i.pinimg.com/736x/6c/07/fb/6c07fb41faa361b32f8c82020ba233a3.jpg" },
+            { name: "Alejandro", imgSrc: "https://i.pinimg.com/1200x/e7/86/07/e78607796652e6e6f4b885f077837973.jpg" },
+            { name: "Ametista", imgSrc: "https://i.pinimg.com/736x/11/b5/05/11b5056b41f87fbe3120b68ed5dcfb09.jpg" },
+            { name: "Amy", imgSrc: "https://i.pinimg.com/1200x/17/e8/f1/17e8f14d01b7b69dc4099740ef5fb4dd.jpg" },
+            { name: "Androide 18", imgSrc: "https://i.pinimg.com/736x/4c/68/ff/4c68ffd02e2220ec0b92f169f95d2e9f.jpg" },
+            { name: "Ariel", imgSrc: "https://i.pinimg.com/736x/fe/a4/2e/fea42ebd0c67f19d1c0df8fe7a9c6613.jpg" },
+            { name: "Auriana", imgSrc: "https://i.pinimg.com/1200x/15/44/0b/15440bfe0df83dad83a7330b96dcc72b.jpg" },
+            { name: "B.O.B", imgSrc: "https://i.pinimg.com/736x/8c/c7/dc/8cc7dc812351093b69d55b34fee82e17.jpg" },
+            { name: "Barbie", imgSrc: "https://i.pinimg.com/1200x/bd/e7/29/bde7296be641d72842be35b84065b48f.jpg" },
+            { name: "Bayonetta", imgSrc: "https://i.pinimg.com/736x/8e/1e/cc/8e1eccca6c1a6b76fbc2e0a5a055f327.jpg" },
+            { name: "Bean", imgSrc: "https://i.pinimg.com/1200x/45/d7/e2/45d7e2defb83d5694467fde7cf165dd9.jpg" },
+            { name: "Belgim E.O", imgSrc: "https://m.media-amazon.com/images/M/MV5BODhhYWMxNzMtZGY2NS00MmM1LWI5OWItZjU1N2ZiNDA5NTI1XkEyXkFqcGc@._V1_.jpg" },
+            { name: "Ben 10 (teen)", imgSrc: "https://i.pinimg.com/736x/ad/5c/cd/ad5ccdba073abda30c152f7eac48447b.jpg" },
+            { name: "Bender", imgSrc: "https://i.pinimg.com/736x/17/e2/65/17e2654def74fcc7137d202fb48f7c9a.jpg" },
+            { name: "Billy", imgSrc: "https://i.pinimg.com/736x/b6/55/a2/b655a2923fd04d20f9cf2520e8724536.jpg" },
+            { name: "Blaze", imgSrc: "https://i.pinimg.com/736x/b8/89/61/b889619ef87861b12d6171172cf851a1.jpg" },
+            { name: "Bloom", imgSrc: "https://i.pinimg.com/1200x/e0/b8/88/e0b8886f107836ff53010f9ab7dc0934.jpg" },
+            { name: "Bowser", imgSrc: "https://i.pinimg.com/1200x/cf/3f/ec/cf3fec1f6b9334e0255065f150fa97a9.jpg" },
+            { name: "Brago", imgSrc: "https://i.pinimg.com/1200x/7f/28/31/7f283141b761fee05de62cd51f4926ee.jpg" },
+            { name: "Bugs Bunny", imgSrc: "https://i.pinimg.com/1200x/ff/d1/66/ffd166e976132eb05bf59b5339a01931.jpg" },
+            { name: "Camilla", imgSrc: "https://i.pinimg.com/736x/47/c1/ff/47c1ffc1cb760fb9cd8bee66b4f8c57a.jpg" },
+            { name: "Candace", imgSrc: "https://i.pinimg.com/736x/6c/72/f0/6c72f0fc188277b0996ab78fffe31729.jpg" },
+            { name: "Carlos Oliveira", imgSrc: "https://i.pinimg.com/736x/9c/d7/61/9cd7611ff4aaceecd802b75a2d2ad1f6.jpg" },
+            { name: "Chat Noir", imgSrc: "https://i.pinimg.com/736x/c3/ed/77/c3ed7755f4cbee4cd34316139d132597.jpg" },
+            { name: "Chef Hatchet", imgSrc: "https://i.pinimg.com/1200x/4f/7c/8b/4f7c8bc30de9875dba940c17fcd6264a.jpg" },
+            { name: "Clara", imgSrc: "https://i.pinimg.com/736x/7c/74/2a/7c742abdb8eab5753437213c31401b17.jpg" },
+            { name: "Clarence", imgSrc: "https://i.pinimg.com/1200x/ed/50/84/ed5084c8f0cf0f3f7c9f60df18346c20.jpg" },
+            { name: "Clover", imgSrc: "https://i.pinimg.com/1200x/72/4c/32/724c3291c00945fd0d7fe8b1052787b5.jpg" },
+            { name: "Connie", imgSrc: "https://i.pinimg.com/736x/92/a2/30/92a2302a14c0116a861a0365d2c1583b.jpg" },
+            { name: "Consuela", imgSrc: "https://i.pinimg.com/736x/bb/f0/ff/bbf0ff44ddf2003262e0ee7999ab5ea3.jpg" },
+            { name: "Cortana", imgSrc: "https://i.pinimg.com/736x/00/93/12/0093124294f30d296f6c6155485c300c.jpg" },
+            { name: "Corvina", imgSrc: "https://i.pinimg.com/736x/fc/e3/30/fce330b50ce9cbf53287e441be15d597.jpg" },
+            { name: "Cosmo", imgSrc: "https://i.pinimg.com/736x/47/22/99/472299b4c669c052c662df1730403d83.jpg" },
+            { name: "Courtney", imgSrc: "https://i.pinimg.com/1200x/0a/c5/52/0ac5521dddf64ab0b5d08e6e36a2c10b.jpg" },
+            { name: "Crash", imgSrc: "https://i.pinimg.com/736x/98/e7/25/98e7251ed569efffda255ab33c0ffb11.jpg" },
+            { name: "Cyborg", imgSrc: "https://i.pinimg.com/736x/bc/ef/b9/bcefb901b8a25aaf2716e142e9cf89a9.jpg" },
+            { name: "Daffy Duck", imgSrc: "https://i.pinimg.com/736x/be/a3/7e/bea37edf64883f0cebaa6899c9fbad71.jpg" },
+            { name: "Darwin Watterson", imgSrc: "https://i.pinimg.com/736x/44/ad/5f/44ad5f25f6dae6e19757b15346684583.jpg" },
+            { name: "Dave", imgSrc: "https://i.pinimg.com/736x/09/c8/6c/09c86cdb37c1ad86b793818f12c1d814.jpg" },
+            { name: "Detective Conan", imgSrc: "https://i.pinimg.com/736x/77/e4/e9/77e4e9ddb6f514b151c15d16b0cf207d.jpg" },
+            { name: "Dexter", imgSrc: "https://i.pinimg.com/736x/c8/68/e6/c868e63417b5653ac6f1bfb965cea28c.jpg" },
+            { name: "Disgusto", imgSrc: "https://i.pinimg.com/736x/3c/04/b1/3c04b169f077246bebbe15a4557896f2.jpg" },
+            { name: "Dolly", imgSrc: "https://i.pinimg.com/1200x/f6/cc/ad/f6ccadaefbf317d939a58c08a13bb8b8.jpg" },
+            { name: "Doraemon", imgSrc: "https://i.pinimg.com/736x/b1/75/de/b175de80fb0f5ca9b5230f0b12f3c13c.jpg" },
+            { name: "Duncan", imgSrc: "https://i.pinimg.com/1200x/a1/56/b1/a156b1d64b2e5309a8999be12c9a7247.jpg" },
+            { name: "Edna", imgSrc: "https://i.pinimg.com/736x/04/02/3c/04023ce1f4c71fa3d0b18118753f5d13.jpg" },
+            { name: "Eep", imgSrc: "https://i.pinimg.com/736x/99/be/fb/99befbf9776ca9c88c08c141e5ec507c.jpg" },
+            { name: "Eli Shane", imgSrc: "https://i.pinimg.com/736x/00/2a/8c/002a8c4259c1d4ee38792ef48bf901f1.jpg" },
+            { name: "Elsa", imgSrc: "https://i.pinimg.com/736x/fd/26/cd/fd26cd346c9e73430dc9ba28e318fb74.jpg" },
+            { name: "Empoleon", imgSrc: "https://i.pinimg.com/1200x/b2/52/ea/b252eac40b5327d0691ddf9e6c9ec7d3.jpg" },
+            { name: "Eric Cartman", imgSrc: "https://i.pinimg.com/736x/31/3a/b7/313ab7f6d385f544ffc90681ae08c117.jpg" },
+            { name: "Ferb", imgSrc: "https://i.pinimg.com/736x/63/04/d3/6304d368076442119f65936ca107067c.jpg" },
+            { name: "Ferocia", imgSrc: "https://i.pinimg.com/736x/9c/31/15/9c31155d6aa8c5ee9b807c9d022d0fcb.jpg" },
+            { name: "Finn", imgSrc: "https://i.pinimg.com/736x/29/83/75/298375aacfcc94f3310fad5578000f6d.jpg" },
+            { name: "Francine Smith", imgSrc: "https://i.pinimg.com/736x/18/c1/d2/18c1d2489a64b1b4f9cc78318e62da94.jpg" },
+            { name: "Ganyu", imgSrc: "https://i.pinimg.com/736x/46/db/7e/46db7e6db045ac28eff3a551e7754d50.jpg" },
+            { name: "Garnet", imgSrc: "https://i.pinimg.com/736x/65/9b/d2/659bd260c80c7ecb1e2c1d7c7c3e9508.jpg" },
+            { name: "Giyu", imgSrc: "https://i.pinimg.com/736x/fa/78/dd/fa78ddb22728f7ae661b3c18615d1d68.jpg" },
+            { name: "Gloria", imgSrc: "https://i.pinimg.com/736x/a3/9d/52/a39d524c0413fac8377305e44452a869.jpg" },
+            { name: "Goku", imgSrc: "https://i.pinimg.com/1200x/be/2c/ca/be2cca993b93995cc2a364201ae925a3.jpg" },
+            { name: "Gommarosa", imgSrc: "https://i.pinimg.com/736x/27/3e/df/273edf0076e41b90096717b89e04c1aa.jpg" },
+            { name: "Gretchen", imgSrc: "https://i.pinimg.com/736x/17/89/52/178952f924a0f5dad307f42777d43512.jpg" },
+            { name: "Grizzly", imgSrc: "https://i.pinimg.com/1200x/2c/0a/98/2c0a980377e0a6befa3b4e7fb50be361.jpg" },
+            { name: "Gruk", imgSrc: "https://i.pinimg.com/736x/4f/d0/97/4fd097204b8ce94fc06f0f52eec422d2.jpg" },
+            { name: "Gumball", imgSrc: "https://i.pinimg.com/736x/af/61/0f/af610f55e819f4bd3f37e5001a2b19ee.jpg" },
+            { name: "Gwen", imgSrc: "https://i.pinimg.com/736x/3e/67/48/3e6748b9ba3f30cda452f7209bba5037.jpg" },
+            { name: "Hayley", imgSrc: "https://i.pinimg.com/1200x/7b/72/e6/7b72e614ce0b79c150ce3e3f7ec57e53.jpg" },
+            { name: "Heather", imgSrc: "https://i.pinimg.com/1200x/ff/24/d2/ff24d2d8c493586d4f787f3e8c49f350.jpg" },
+            { name: "Homer Simpson", imgSrc: "https://i.pinimg.com/1200x/1d/b9/18/1db918fe2b5dff69f35186ad20cc1752.jpg" },
+            { name: "Iris", imgSrc: "https://i.pinimg.com/1200x/1e/0d/b0/1e0db0015ffc222b1f9a637c6265d17b.jpg" },
+            { name: "Jake", imgSrc: "https://i.pinimg.com/736x/00/07/e5/0007e54a9a0d180850ed97718df1e432.jpg" },
+            { name: "James", imgSrc: "https://i.pinimg.com/736x/c7/86/6f/c7866f0aaa71ed0ee10f2c57c84354d9.jpg" },
+            { name: "Jamie", imgSrc: "https://i.pinimg.com/1200x/1a/77/9f/1a779f8f3bb1864d26cbcd93dbd50606.jpg" },
+            { name: "Jerry", imgSrc: "https://i.pinimg.com/736x/be/2f/e1/be2fe1bde39e5005bdc4cea479dcf6f7.jpg" },
+            { name: "Jessie", imgSrc: "https://i.pinimg.com/736x/ee/fe/10/eefe109155e2672ddd5dc35e3835d7b6.jpg" },
+            { name: "Johnny Bravo", imgSrc: "https://i.pinimg.com/736x/b4/cd/95/b4cd959a9bb7efaf289ba3e4ae85d4b8.jpg" },
+            { name: "Johnny Test", imgSrc: "https://i.pinimg.com/736x/a7/2d/cd/a72dcd2fecd65b9f49fc0e0fe5d4f08b.jpg" },
+            { name: "Katara", imgSrc: "https://i.pinimg.com/736x/00/14/5e/00145ebb0ae3ae4b2af824d831faf313.jpg" },
+            { name: "Kirby", imgSrc: "https://i.pinimg.com/736x/ba/e6/63/bae6637b3efecfd002f0c1f9605e53be.jpg" },
+            { name: "Kratos", imgSrc: "https://i.pinimg.com/736x/d9/d4/4f/d9d44f16329a4e72b4b8e45d41d83262.jpg" },
+            { name: "Ladybug", imgSrc: "https://i.pinimg.com/736x/72/32/f1/7232f16bdab9dd11a2fa77403a1fe9f1.jpg" },
+            { name: "Lapis", imgSrc: "https://i.pinimg.com/1200x/09/fb/12/09fb12467957da96913fc8f75e6f6356.jpg" },
+            { name: "Leela", imgSrc: "https://i.pinimg.com/1200x/6e/c8/b6/6ec8b67dc6bb062afc2007495b041e84.jpg" },
+            { name: "Leon Kennedy", imgSrc: "https://i.pinimg.com/736x/0a/27/cd/0a27cd44aae181df0884d85bf18d0574.jpg" },
+            { name: "Leone", imgSrc: "https://i.pinimg.com/736x/e7/39/42/e73942ae0951adead9eb1c325ccbc278.jpg" },
+            { name: "Link", imgSrc: "https://i.pinimg.com/736x/be/29/0a/be290ac4f5b6f1de6f88ee2099e04da1.jpg" },
+            { name: "Lok Lamberk", imgSrc: "https://i.pinimg.com/736x/e4/2f/00/e42f00392808fe1283088f26d7dc3680.jpg" },
+            { name: "Luci", imgSrc: "https://i.pinimg.com/736x/ac/3d/7a/ac3d7a22d32d85f1a4c8bed9eeff0b75.jpg" },
+            { name: "Lucinda", imgSrc: "https://i.pinimg.com/736x/14/8b/b1/148bb1d4e05a07005790f152273ae2be.jpg" },
+            { name: "Luigi", imgSrc: "https://i.pinimg.com/1200x/0b/49/30/0b49308522463829166e76b0d914c8b8.jpg" },
+            { name: "Mandy", imgSrc: "https://i.pinimg.com/736x/60/95/01/60950157128f9671609b5dcf0788553d.jpg" },
+            { name: "Marceline", imgSrc: "https://i.pinimg.com/736x/bb/93/5e/bb935e39f2d66248b6e4178227bdb233.jpg" },
+            { name: "Marge", imgSrc: "https://i.pinimg.com/736x/4a/92/1d/4a921da60b6e183b05ca430e93591319.jpg" },
+            { name: "Mario", imgSrc: "https://i.pinimg.com/736x/61/62/b5/6162b56bc61a4050bb34d7203e03642d.jpg" },
+            { name: "Mary", imgSrc: "https://i.pinimg.com/1200x/4c/a0/e1/4ca0e19e9a0ade6f357363437e2e21b2.jpg" },
+            { name: "Mcgee", imgSrc: "https://i.pinimg.com/736x/f6/66/e6/f666e6b35b12c28ac454d7b71e4dcd93.jpg" },
+            { name: "Meg", imgSrc: "https://i.pinimg.com/1200x/fc/08/05/fc080502466c0c9a0d48433022fe507d.jpg" },
+            { name: "Mortino", imgSrc: "https://i.pinimg.com/1200x/a6/40/79/a64079d581a91443333e800939bed57a.jpg" },
+            { name: "Naruto", imgSrc: "https://i.pinimg.com/736x/22/3f/a8/223fa84e2e58598d27a6d733b5ff99e7.jpg" },
+            { name: "Patrick", imgSrc: "https://i.pinimg.com/736x/a9/3b/10/a93b10ac7fd73a731efedb50bfbbc1c3.jpg" },
+            { name: "Peppa Pig", imgSrc: "https://i.pinimg.com/1200x/45/b2/88/45b28859333ddcb2470ae59f88d56093.jpg" },
+            { name: "Peridot", imgSrc: "https://i.pinimg.com/736x/d5/3e/f6/d53ef6f0ec684f7f0f888971dded59fb.jpg" },
+            { name: "Perry", imgSrc: "https://i.pinimg.com/736x/6a/77/65/6a7765e22f89b8bceead355ce8fe5982.jpg" },
+            { name: "Peter", imgSrc: "https://i.pinimg.com/736x/9e/40/74/9e4074bbe7890cd245b51b9ff5c0e33c.jpg" },
+            { name: "Po", imgSrc: "https://i.pinimg.com/1200x/c1/c3/27/c1c327391c8cbd539d7a2555e2b9051d.jpg" },
+            { name: "Ponygon", imgSrc: "https://i.pinimg.com/1200x/4a/ee/29/4aee29b5bc03c3f3dfbec858428e86a9.jpg" },
+            { name: "Quagmire", imgSrc: "https://i.pinimg.com/736x/02/ee/2a/02ee2a26595b79605e549d31636c8904.jpg" },
+            { name: "Rayman", imgSrc: "https://i.pinimg.com/736x/dd/fb/39/ddfb395a795475f82f0c5d4286f47bd3.jpg" },
+            { name: "Re Julien", imgSrc: "https://i.pinimg.com/736x/65/3b/19/653b190d1e98314d75c33faa946d144d.jpg" },
+            { name: "Rick", imgSrc: "https://i.pinimg.com/736x/71/c3/46/71c3461ace4e33b9522d4c1982dbbe3d.jpg" },
+            { name: "Rico", imgSrc: "https://i.pinimg.com/1200x/54/29/6c/54296cbbb7164959bb91a10d5d99c9e9.jpg" },
+            { name: "Robin GO", imgSrc: "https://i.pinimg.com/736x/92/b6/50/92b650adbe57c5cec55a3ef46b65e933.jpg" },
+            { name: "Roger", imgSrc: "https://i.pinimg.com/736x/5c/32/97/5c32974e70a02bbccbd5eb22e2572daf.jpg" },
+            { name: "Rosalinda", imgSrc: "https://i.pinimg.com/736x/da/7d/ea/da7deae0392afdba03699bf98806ec38.jpg" },
+            { name: "Sam", imgSrc: "https://i.pinimg.com/736x/e9/b1/0c/e9b10cb8868e19f0a2ea254fca79b519.jpg" },
+            { name: "Shrek", imgSrc: "https://i.pinimg.com/1200x/96/0b/6a/960b6a68e0f1d861d143b55aa84059e6.jpg" },
+            { name: "Signorina Scimmia", imgSrc: "https://i.pinimg.com/1200x/d4/8c/c7/d48cc793b03983680d00449e7eda388c.jpg" },
+            { name: "Simba", imgSrc: "https://i.pinimg.com/736x/72/b4/a8/72b4a8fab22d9a4a2f274932f440afe2.jpg" },
+            { name: "Skipper", imgSrc: "https://i.pinimg.com/736x/f7/93/48/f79348f7e7f2123575ec9288963c7322.jpg" },
+            { name: "Spinel", imgSrc: "https://i.pinimg.com/736x/d2/78/b0/d278b0606af1be5a2fb8ebf69dfca045.jpg" },
+            { name: "Spongebob", imgSrc: "https://i.pinimg.com/736x/9d/43/03/9d4303eb6df9cf9e6ca76a255c0147d5.jpg" },
+            { name: "Squiddi", imgSrc: "https://i.pinimg.com/736x/39/8b/d2/398bd2710ceaf3d07b44ce0b4c130da2.jpg" },
+            { name: "Squitto", imgSrc: "https://i.pinimg.com/736x/0a/d9/e8/0ad9e808910fb1cd86a259a39d694a64.jpg" },
+            { name: "Squirt", imgSrc: "https://i.pinimg.com/1200x/07/6d/ba/076dba0b7e5db623077963add2caf810.jpg" },
+            { name: "Stan", imgSrc: "https://i.pinimg.com/736x/7b/8b/a8/7b8ba8449f8d471eac4e033a00acc2ed.jpg" },
+            { name: "Stellarubia", imgSrc: 'https://i.pinimg.com/736x/fe/0f/50/fe0f502c141c3c69054e22fc539199b0.jpg' },
+            { name: "Stitch", imgSrc: "https://i.pinimg.com/1200x/0b/00/9f/0b009f581cfd02d093d8f7850df93582.jpg" },
+            { name: "Superboy", imgSrc: "https://i.pinimg.com/736x/e3/b6/9e/e3b69e2535013ad4fe46a0187dfd007b.jpg" },
+            { name: "Talia", imgSrc: "https://i.pinimg.com/736x/b4/7f/c4/b47fc4659d4ff98cc6258b414a8cc4c7.jpg" },
+            { name: "Timmy", imgSrc: "https://i.pinimg.com/736x/cb/6b/6e/cb6b6e48d342bd40daba5031f598d4af.jpg" },
+            { name: "Titeuf", imgSrc: "https://i.pinimg.com/736x/44/98/b1/4498b1862c5e19112d8dbe89495925a3.jpg" },
+            { name: "Tom", imgSrc: "https://i.pinimg.com/1200x/e2/d2/c9/e2d2c9858d0a002a45d68ba97d477b0e.jpg" },
+            { name: "Trixie", imgSrc: "https://i.pinimg.com/736x/16/f7/3b/16f73b7c2512a837cdce35a6ccaa4df4.jpg" },
+            { name: "Waluigi", imgSrc: "https://i.pinimg.com/736x/0e/e2/93/0ee2931b7e07fa1d1949f4d41b9b4e93.jpg" },
+            { name: "Wanda", imgSrc: "https://i.pinimg.com/1200x/fd/b3/ba/fdb3bada328ff3eb5aff2cc8c5bc92d1.jpg" },
+            { name: "Wario", imgSrc: "https://i.pinimg.com/736x/07/72/16/07721681614a459938a7f85ec450f957.jpg" },
+            { name: "Yang", imgSrc: "https://i.pinimg.com/736x/67/19/2c/67192c45308be09379c7841bf866a480.jpg" },
+            { name: "Ying", imgSrc: "https://i.pinimg.com/1200x/13/b4/ff/13b4ff2998c7f763004788fd67468e61.jpg" },
+            { name: "Yugo", imgSrc: "https://i.pinimg.com/1200x/64/d9/58/64d9583ffc1afad8801766065e64959a.jpg" },
+            { name: "Zatch Bell", imgSrc: "https://i.pinimg.com/1200x/35/9c/9e/359c9e3e0530e20c95754847066e8167.jpg" },
+            { name: "Zick", imgSrc: "https://i.pinimg.com/1200x/14/e6/05/14e6054b56e4e2379936c00403566c00.jpg" },
+        ].sort((a, b) => a.name.localeCompare(b.name))
+         .map((char, index) => ({ ...char, id: `pre${index + 1}` }));
+
 
         // --- FUNZIONI DI NAVIGAZIONE E UI ---
         const showScreen = (screenId) => {
@@ -578,16 +795,26 @@
         });
         
         // --- CONFIGURAZIONE ROSTER (HOST) ---
-        const handleAddCharacter = () => {
+        const addCharacterToRoster = (char) => {
+             if (localRoster.length >= 100) {
+                showMessage("Hai raggiunto il limite di 100 personaggi.", 2000);
+                return;
+            }
+            if(localRoster.some(c => c.id === char.id)) {
+                showMessage(`${char.name} è già stato aggiunto.`, 1500);
+                return;
+            }
+            localRoster.push(char);
+            updateRosterUI();
+            renderPredefinedRoster();
+        };
+
+        const handleAddCharacterFromCustom = () => {
             const name = charNameInput.value.trim();
             const imgSrc = charImgInput.value.trim();
 
             if (!name || !imgSrc) {
                 showMessage("Inserisci nome e URL dell'immagine.", 2000);
-                return;
-            }
-            if (localRoster.length >= 100) {
-                showMessage("Hai raggiunto il limite di 100 personaggi.", 2000);
                 return;
             }
 
@@ -599,18 +826,17 @@
             }
 
             const charId = Date.now().toString() + Math.random(); 
-            localRoster.push({ id: charId, name, imgSrc });
+            addCharacterToRoster({ id: charId, name, imgSrc });
             
             charNameInput.value = '';
             charImgInput.value = '';
             charNameInput.focus();
-            
-            updateRosterUI();
         };
 
         const handleRemoveCharacter = (charId) => {
             localRoster = localRoster.filter(c => c.id !== charId);
             updateRosterUI();
+            renderPredefinedRoster();
         };
 
         const updateRosterUI = () => {
@@ -630,6 +856,21 @@
             const count = localRoster.length;
             charCounter.textContent = `Personaggi: ${count}/100`;
             createLobbyBtn.disabled = count < 4;
+        };
+
+        const renderPredefinedRoster = () => {
+            predefinedGrid.innerHTML = '';
+            predefinedRoster.forEach(char => {
+                const isAdded = localRoster.some(c => c.id === char.id);
+                const charEl = document.createElement('div');
+                charEl.className = 'predefined-char';
+                if(isAdded) charEl.classList.add('added');
+                charEl.innerHTML = `<img src="${char.imgSrc}" alt="${char.name}">`;
+                charEl.addEventListener('click', () => {
+                    if(!isAdded) addCharacterToRoster(char);
+                });
+                predefinedGrid.appendChild(charEl);
+            });
         };
         
         // --- LOGICA DELLA LOBBY ---
@@ -1371,7 +1612,7 @@
         // --- EVENT LISTENERS ---
         showRosterConfigBtn.addEventListener('click', () => showScreen('roster-config-screen'));
         backToHomeBtn.addEventListener('click', () => showScreen('home-screen'));
-        addCharBtn.addEventListener('click', handleAddCharacter);
+        addCharBtn.addEventListener('click', handleAddCharacterFromCustom);
         createLobbyBtn.addEventListener('click', createGameFromRoster);
         joinGameBtn.addEventListener('click', joinGame);
         leaveLobbyBtn.addEventListener('click', leaveGame);
@@ -1385,6 +1626,21 @@
              });
         });
 
+        showCustomBtn.addEventListener('click', () => {
+            customAddView.style.display = 'block';
+            predefinedRosterView.style.display = 'none';
+            showCustomBtn.classList.add('active');
+            showPredefinedBtn.classList.remove('active');
+        });
+
+        showPredefinedBtn.addEventListener('click', () => {
+            customAddView.style.display = 'none';
+            predefinedRosterView.style.display = 'block';
+            showCustomBtn.classList.remove('active');
+            showPredefinedBtn.classList.add('active');
+        });
+
+
         // Chat Event Listeners
         chatToggleBtn.addEventListener('click', () => chatContainer.classList.toggle('open'));
         chatSendBtn.addEventListener('click', sendChatMessage);
@@ -1396,6 +1652,8 @@
         // --- Inizializzazione ---
         playerNameInput.value = localStorage.getItem('playerName') || '';
         updateRosterUI();
+        renderPredefinedRoster();
+        showCustomBtn.click();
     </script>
 </body>
 </html>
