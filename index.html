@@ -713,6 +713,7 @@
             { name: "Meg", imgSrc: "https://i.pinimg.com/1200x/fc/08/05/fc080502466c0c9a0d48433022fe507d.jpg" },
             { name: "Mortino", imgSrc: "https://i.pinimg.com/1200x/a6/40/79/a64079d581a91443333e800939bed57a.jpg" },
             { name: "Naruto", imgSrc: "https://i.pinimg.com/736x/22/3f/a8/223fa84e2e58598d27a6d733b5ff99e7.jpg" },
+            { name: "Nicole", imgSrc: "https://i.pinimg.com/736x/95/88/32/958832447418773426ae7f9bd2fdf38b.jpg" },
             { name: "Patrick", imgSrc: "https://i.pinimg.com/736x/a9/3b/10/a93b10ac7fd73a731efedb50bfbbc1c3.jpg" },
             { name: "Peppa Pig", imgSrc: "https://i.pinimg.com/1200x/45/b2/88/45b28859333ddcb2470ae59f88d56093.jpg" },
             { name: "Peridot", imgSrc: "https://i.pinimg.com/736x/d5/3e/f6/d53ef6f0ec684f7f0f888971dded59fb.jpg" },
@@ -723,6 +724,7 @@
             { name: "Quagmire", imgSrc: "https://i.pinimg.com/736x/02/ee/2a/02ee2a26595b79605e549d31636c8904.jpg" },
             { name: "Rayman", imgSrc: "https://i.pinimg.com/736x/dd/fb/39/ddfb395a795475f82f0c5d4286f47bd3.jpg" },
             { name: "Re Julien", imgSrc: "https://i.pinimg.com/736x/65/3b/19/653b190d1e98314d75c33faa946d144d.jpg" },
+            { name: "Richard", imgSrc: "https://i.pinimg.com/736x/3f/57/61/3f5761972402157f6969c91edc160322.jpg" },
             { name: "Rick", imgSrc: "https://i.pinimg.com/736x/71/c3/46/71c3461ace4e33b9522d4c1982dbbe3d.jpg" },
             { name: "Rico", imgSrc: "https://i.pinimg.com/1200x/54/29/6c/54296cbbb7164959bb91a10d5d99c9e9.jpg" },
             { name: "Robin GO", imgSrc: "https://i.pinimg.com/736x/92/b6/50/92b650adbe57c5cec55a3ef46b65e933.jpg" },
@@ -1056,6 +1058,7 @@
                      clearLocalTimers();
                      break;
                 case 'finished':
+                    voteModal.style.display = 'none'; // Hide vote modal on finish
                     showScreen('results-screen');
                     if (unsubFromGame) unsubFromGame();
                     unsubFromGame = null;
