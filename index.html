@@ -203,7 +203,7 @@
             opacity: 0.5;
             cursor: not-allowed;
         }
-        .advantage-item .tooltip {
+        .advantage-item .tooltip, .player-advantage-btn .tooltip {
             visibility: hidden;
             width: 160px;
             background-color: #111;
@@ -222,7 +222,7 @@
             font-family: var(--font-main);
             pointer-events: none;
         }
-        .advantage-item:hover .tooltip {
+        .advantage-item:hover .tooltip, .player-advantage-btn:hover .tooltip {
             visibility: visible;
             opacity: 1;
         }
@@ -349,6 +349,7 @@
         .combatant { display: flex; flex-direction: column; align-items: center; }
         .combatant img { width: 150px; height: 150px; object-fit: cover; border-radius: 50%; border: 5px solid var(--border-color); margin-bottom: 15px; }
         .combatant h3 { font-family: var(--font-title); font-size: 1.5rem; }
+        .combatant .vote-count-display { font-size: 1rem; color: var(--warning-color); margin-top: 5px; height: 1.2em;}
         .vs { font-family: var(--font-title); font-size: 4rem; color: var(--danger-color); text-shadow: 0 0 10px var(--danger-color); }
         .vote-actions { display: flex; justify-content: center; gap: 20px; margin-top: 30px; }
         .vote-btn { width: 180px; }
@@ -563,11 +564,6 @@
             <div id="arena"></div>
         </div>
         
-        <div id="player-advantages-container" style="display: none;">
-            <h3>I Tuoi Vantaggi</h3>
-            <div id="player-advantages-list"></div>
-        </div>
-
         <!-- Chat UI -->
         <div id="chat-container">
             <div id="chat-header">Chat di Gioco</div>
@@ -623,6 +619,18 @@
             </div>
         </div>
     </div>
+    
+    <!-- Modale Guardia del Corpo -->
+    <div id="bodyguard-choice-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2>Guardia del Corpo</h2>
+            <p>Scegli un personaggio da proteggere in questo duello.</p>
+            <p>Se perderà, il duello finirà in pareggio.</p>
+            <div id="bodyguard-choice-actions" class="vote-actions">
+                <!-- Buttons will be injected here -->
+            </div>
+        </div>
+    </div>
 
     <!-- Schermata dei Risultati -->
     <div id="results-screen" class="screen">
@@ -652,15 +660,15 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, deleteDoc, runTransaction, addDoc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, deleteDoc, runTransaction, addDoc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
         
         const firebaseConfig = {
             apiKey: "AIzaSyAu6Yy9B_VFAek56ZI35lznAlLzRv0G4pY",
             authDomain: "imperialism-online.firebaseapp.com",
             projectId: "imperialism-online",
-            storageBucket: "imperialism-online.firebasestorage.app",
+            storageBucket: "imperialism-online.appspot.com",
             messagingSenderId: "1073749237649",
             appId: "1:1073749237649:web:b8c01c3db78a13fa454430",
             measurementId: "G-7GJK149KRR"
@@ -702,9 +710,6 @@
         const tempLeaderboard = document.getElementById('temp-leaderboard');
         const tempLeaderboardList = document.getElementById('temp-leaderboard-list');
 
-        const playerAdvantagesContainer = document.getElementById('player-advantages-container');
-        const playerAdvantagesList = document.getElementById('player-advantages-list');
-        
         const playerAdvantagesContainerModal = document.getElementById('player-advantages-container-modal');
         const playerAdvantagesListModal = document.getElementById('player-advantages-list-modal');
 
@@ -722,6 +727,8 @@
 
         const shieldChoiceModal = document.getElementById('shield-choice-modal');
         const shieldChoiceActions = document.getElementById('shield-choice-actions');
+        const bodyguardChoiceModal = document.getElementById('bodyguard-choice-modal');
+        const bodyguardChoiceActions = document.getElementById('bodyguard-choice-actions');
 
         const winnerAnnouncement = document.getElementById('winner-announcement');
         const finalRankingTableBody = document.querySelector('#final-ranking-table tbody');
@@ -748,12 +755,12 @@
         let localRoster = [];
         let animationInterval = null;
         let duelResolutionTimer = null;
+        let isProcessingDuel = false;
         
         const advantages = {
             'extra_vote': { name: 'Voto Extra', emoji: '🗳️', description: 'Il tuo voto per questo round conta come due voti.' },
             'destiny_shield': { name: 'Scudo del Destino', emoji: '🛡️', description: 'Se il personaggio per cui hai votato perde, puoi scegliere di salvare uno dei due sfidanti, annullando il duello.' },
             'cancel_votes': { name: 'Voto Decisivo', emoji: '🚫', description: 'Tutti i voti degli altri giudici vengono azzerati. Solo il tuo conta.' },
-            'custom_choice': { name: 'Scelta del Campione', emoji: '🎯', description: 'Scegli tu il prossimo personaggio che attaccherà.' },
             'calculated_chaos': { name: 'Caos Calcolato', emoji: '🎲', description: 'Annulla tutti i voti. Il vincitore del duello viene scelto casualmente.' },
             'revelation': { name: 'Rivelazione', emoji: '🔮', description: 'Rivela solo a te il conteggio dei voti in tempo reale.' },
             'extra_time': { name: 'Tempo Extra', emoji: '⏳', description: 'Aggiunge 15 secondi al timer del voto per tutti.' },
@@ -909,7 +916,7 @@
             { name: "Zatch Bell", imgSrc: "https://i.pinimg.com/1200x/35/9c/9e/359c9e3e0530e20c95754847066e8167.jpg" },
             { name: "Zick", imgSrc: "https://i.pinimg.com/1200x/14/e6/05/14e6054b56e4e2379936c00403566c00.jpg" },
         ].sort((a, b) => a.name.localeCompare(b.name))
-         .map((char, index) => ({ ...char, id: `pre${index + 1}` }));
+       .map((char, index) => ({ ...char, id: `pre${index + 1}` }));
 
 
         // --- FUNZIONI DI NAVIGAZIONE E UI ---
@@ -922,7 +929,6 @@
             tempLeaderboard.style.display = isGameScreen ? 'block' : 'none';
             if (!isGameScreen) {
                 chatContainer.classList.remove('open');
-                playerAdvantagesContainer.style.display = 'none';
             }
         };
 
@@ -1045,6 +1051,7 @@
                 gameId: gameId,
                 hostId: currentUser.uid,
                 judges: [{ uid: currentUser.uid, name: judgeName, advantages: [] }],
+                initialRoster: localRoster, 
                 characters: localRoster, 
                 eliminated: [],
                 gameState: "lobby",
@@ -1140,14 +1147,30 @@
                 const gameData = doc.data();
                 const isHost = currentUser && currentUser.uid === gameData.hostId;
 
-                
-                if (isHost && gameData.gameState === 'voting') {
-                    const votesCount = Object.keys(gameData.currentDuel.votes || {}).length;
-                    const judgesCount = gameData.judges.length;
-                    if (votesCount >= judgesCount) {
-                        clearTimeout(duelResolutionTimer);
-                        resolveDuel();
-                        return; 
+                // Host-specific real-time logic
+                if (isHost && !isProcessingDuel) {
+                    // All votes are in check
+                    if (gameData.gameState === 'voting') {
+                        const votesCount = Object.keys(gameData.currentDuel.votes || {}).length;
+                        const judgesCount = gameData.judges.length;
+                        if (votesCount >= judgesCount) {
+                            clearTimeout(duelResolutionTimer);
+                            resolveDuel();
+                            return; 
+                        }
+                    }
+                    // Extra time advantage check
+                    if (gameData.gameState === 'voting' && gameData.currentDuel && !gameData.currentDuel.timeExtended) {
+                       const usedAdv = Object.values(gameData.currentDuel.usedAdvantages || {});
+                       if (usedAdv.some(adv => adv.key === 'extra_time')) {
+                           const newDeadline = (gameData.currentDuel.voteDeadline || Date.now()) + 15000;
+                           clearTimeout(duelResolutionTimer); // Clear old timer
+                           duelResolutionTimer = setTimeout(resolveDuel, newDeadline - Date.now() + 1000);
+                           updateDoc(gameRef, {
+                               'currentDuel.voteDeadline': newDeadline,
+                               'currentDuel.timeExtended': true
+                           });
+                       }
                     }
                 }
                 
@@ -1178,9 +1201,9 @@
                 leaveLobbyBtn.textContent = isHost ? 'Chiudi Lobby' : 'Esci dalla Lobby';
             }
             
-            if (['selection_phase', 'voting', 'reveal_winner', 'reveal_loser', 'round_end'].includes(gameData.gameState)) {
+            if (['selection_phase', 'voting', 'reveal_winner', 'reveal_loser', 'round_end', 'shield_choice_pending'].includes(gameData.gameState)) {
                 updateTemporaryLeaderboard(gameData);
-                //renderPlayerAdvantages(gameData);
+                renderPlayerAdvantages(gameData, gameData.gameState === 'voting');
             }
             
             switch(gameData.gameState) {
@@ -1201,6 +1224,14 @@
                     showMessage(`È ora di votare!`, 0);
                     showVoteModal(gameData);
                     break;
+                case 'shield_choice_pending':
+                     showScreen('game-screen');
+                     updateArena(gameData);
+                     showMessage(gameData.message, 0);
+                     if (currentUser.uid === gameData.currentDuel.shieldChooser) {
+                         showShieldChoiceModal(gameData);
+                     }
+                     break;
                 case 'reveal_winner':
                 case 'reveal_loser':
                 case 'round_end':
@@ -1211,7 +1242,7 @@
                      clearLocalTimers();
                      break;
                 case 'finished':
-                    voteModal.style.display = 'none'; // Hide vote modal on finish
+                    voteModal.style.display = 'none';
                     showScreen('results-screen');
                     if (unsubFromGame) unsubFromGame();
                     unsubFromGame = null;
@@ -1228,9 +1259,10 @@
             if (!gameDoc.exists()) return;
             
             const gameData = gameDoc.data();
-            const shuffledCharacters = shuffleArray([...gameData.characters]);
+            const shuffledCharacters = shuffleArray([...gameData.initialRoster]);
             shuffledCharacters.forEach((char, index) => {
                 char.territories = [index];
+                char.eliminations = 0; // Reset eliminations
             });
 
             const gridSize = shuffledCharacters.length;
@@ -1293,6 +1325,8 @@
                     currentDuel: {
                         attackerId: attacker.id,
                         defenderId: defender.id,
+                        usedAdvantages: {},
+                        votes: {},
                     },
                     message: `${attacker.name} si prepara ad attaccare!`
                 });
@@ -1301,7 +1335,6 @@
                 setTimeout(() => {
                     if (!currentGameId) return; 
                     updateDoc(gameRef, {
-                        'currentDuel.votes': {},
                         'currentDuel.voteDeadline': Date.now() + 15000,
                         gameState: 'voting',
                         message: `${attacker.name} attacca ${defender.name}!`
@@ -1395,7 +1428,8 @@
         };
         
         const resolveDuel = async () => {
-            if (!currentGameId) return;
+            if (!currentGameId || isProcessingDuel) return;
+            isProcessingDuel = true;
             const gameRef = doc(db, "games", currentGameId);
 
             try {
@@ -1404,37 +1438,93 @@
                     if (!gameDoc.exists()) throw "Game not found.";
                     let gameData = gameDoc.data();
 
-                    if(gameData.gameState !== 'voting') return;
-                    
-                    const { attackerId, defenderId, votes } = gameData.currentDuel;
-                    const voteCounts = { [attackerId]: 0, [defenderId]: 0 };
-                    Object.values(votes || {}).forEach(vote => voteCounts[vote]++);
+                    if (gameData.gameState !== 'voting') return;
 
+                    const { attackerId, defenderId, votes, usedAdvantages = {} } = gameData.currentDuel;
+                    
+                    const advantagesPlayed = Object.values(usedAdvantages).map(adv => adv.key);
                     let winnerId, loserId;
-                    if (voteCounts[attackerId] > voteCounts[defenderId]) { [winnerId, loserId] = [attackerId, defenderId]; }
-                    else if (voteCounts[defenderId] > voteCounts[attackerId]) { [winnerId, loserId] = [defenderId, attackerId]; }
-                    else {
+                    let isDraw = false;
+                    let message = "";
+                    let voteCounts = { [attackerId]: 0, [defenderId]: 0 };
+
+                    if (advantagesPlayed.includes('calculated_chaos')) {
                         winnerId = Math.random() < 0.5 ? attackerId : defenderId;
                         loserId = winnerId === attackerId ? defenderId : attackerId;
+                        message = "Il Caos Calcolato ha deciso il vincitore!";
+                    } else if (advantagesPlayed.includes('cancel_votes')) {
+                        const deciderId = Object.keys(usedAdvantages).find(uid => usedAdvantages[uid].key === 'cancel_votes');
+                        const finalVote = votes[deciderId];
+                        if (finalVote) {
+                            winnerId = finalVote;
+                            loserId = winnerId === attackerId ? defenderId : attackerId;
+                        } else {
+                            [winnerId, loserId] = [attackerId, defenderId];
+                        }
+                        message = "Un Voto Decisivo ha scelto il vincitore!";
+                    } else {
+                        for (const voterId in (votes || {})) {
+                            const vote = votes[voterId];
+                            let voteValue = 1;
+                            if (usedAdvantages[voterId]?.key === 'extra_vote') {
+                                voteValue = 2;
+                            }
+                            if (voteCounts[vote] !== undefined) voteCounts[vote] += voteValue;
+                        }
+
+                        if (voteCounts[attackerId] > voteCounts[defenderId]) [winnerId, loserId] = [attackerId, defenderId];
+                        else if (voteCounts[defenderId] > voteCounts[attackerId]) [winnerId, loserId] = [defenderId, attackerId];
+                        else {
+                            const lastWordUserId = Object.keys(usedAdvantages).find(uid => usedAdvantages[uid].key === 'last_word');
+                            if (lastWordUserId && votes[lastWordUserId]) {
+                                winnerId = votes[lastWordUserId];
+                                loserId = winnerId === attackerId ? defenderId : attackerId;
+                            } else {
+                                winnerId = Math.random() < 0.5 ? attackerId : defenderId;
+                                loserId = winnerId === attackerId ? defenderId : attackerId;
+                            }
+                        }
+                        if (advantagesPlayed.includes('plot_twist')) [winnerId, loserId] = [loserId, winnerId];
                     }
                     
+                    const bodyguardInfo = Object.values(usedAdvantages).find(adv => adv.key === 'bodyguard');
+                    if (bodyguardInfo && bodyguardInfo.target === loserId) {
+                        isDraw = true;
+                        const savedChar = gameData.characters.find(c => c.id === loserId);
+                        message = `${savedChar.name} è stato salvato dalla sua Guardia del Corpo! Il duello è un pareggio.`;
+                    }
+
+                    const destinyShieldUserId = Object.keys(usedAdvantages).find(uid => usedAdvantages[uid].key === 'destiny_shield');
+                    if (!isDraw && destinyShieldUserId && votes[destinyShieldUserId] === loserId) {
+                        transaction.update(gameRef, {
+                            gameState: 'shield_choice_pending',
+                            'currentDuel.shieldChooser': destinyShieldUserId,
+                            'currentDuel.winnerId': winnerId,
+                            'currentDuel.loserId': loserId,
+                            'currentDuel.voteCounts': voteCounts,
+                            message: `Scudo del Destino attivato! In attesa della scelta...`
+                        });
+                        return;
+                    }
+
                     let characters = [...gameData.characters];
-                    const winnerIndex = characters.findIndex(c => c.id === winnerId);
-                    const loserIndex = characters.findIndex(c => c.id === loserId);
-
-                    characters[winnerIndex].eliminations = (characters[winnerIndex].eliminations || 0) + 1;
-                    characters[winnerIndex].territories.push(...characters[loserIndex].territories);
-                    characters[loserIndex].territories = [];
-
-                    let eliminated = gameData.eliminated;
-                    eliminated.push({ ...characters[loserIndex], eliminatedBy: characters[winnerIndex].name });
+                    let eliminated = gameData.eliminated || [];
+                    
+                    if (!isDraw) {
+                        const winnerIndex = characters.findIndex(c => c.id === winnerId);
+                        const loserIndex = characters.findIndex(c => c.id === loserId);
+                        if (winnerIndex > -1 && loserIndex > -1) {
+                            characters[winnerIndex].eliminations = (characters[winnerIndex].eliminations || 0) + 1;
+                            characters[winnerIndex].territories.push(...characters[loserIndex].territories);
+                            characters[loserIndex].territories = [];
+                            eliminated.push({ ...characters[loserIndex], eliminatedBy: characters[winnerIndex].name });
+                            if (!message) message = `${characters[winnerIndex].name} ha sconfitto ${characters[loserIndex].name}!`;
+                        }
+                    }
                     
                     const activeCharacters = characters.filter(c => c.territories.length > 0);
-                    
-                    const message = `${characters[winnerIndex].name} ha sconfitto ${characters[loserIndex].name}!`;
-
                     const finalUpdate = {
-                        characters: characters,
+                        characters,
                         eliminated,
                         message,
                         'currentDuel.winnerId': winnerId,
@@ -1444,7 +1534,7 @@
 
                     if (activeCharacters.length <= 1) {
                         finalUpdate.gameState = 'finished';
-                        finalUpdate.message = `La partita è finita! Il vincitore è ${activeCharacters[0].name}!`;
+                        finalUpdate.message = `La partita è finita! Il vincitore è ${activeCharacters[0]?.name || 'Nessuno'}!`;
                     } else {
                         finalUpdate.gameState = 'reveal_winner';
                     }
@@ -1452,6 +1542,8 @@
                 });
             } catch(error) {
                 console.error("Error resolving duel:", error);
+            } finally {
+                isProcessingDuel = false;
             }
         };
         
@@ -1469,7 +1561,7 @@
                 voteModal.style.display = 'flex';
                 voteView.style.display = 'none';
                 revealView.style.display = 'block';
-                winnerRevealText.textContent = `${winner.name} con ${voteCounts[winnerId]} voti`;
+                winnerRevealText.textContent = `${winner.name} con ${voteCounts[winnerId] || 0} voti`;
                 winnerReveal.style.display = 'block';
                 loserReveal.style.display = 'none';
 
@@ -1480,7 +1572,7 @@
                 }
             } else if (gameData.gameState === 'reveal_loser') {
                 voteModal.style.display = 'flex';
-                loserRevealText.textContent = `${loser.name} con ${voteCounts[loserId]} voti`;
+                loserRevealText.textContent = `${loser.name} con ${voteCounts[loserId] || 0} voti`;
                 loserReveal.style.display = 'block';
 
                 if (isHost) {
@@ -1558,12 +1650,12 @@
         const updateTemporaryLeaderboard = (gameData) => {
             if (!gameData.characters) return;
 
-            const totalCharacters = gameData.characters.length;
+            const totalCharacters = gameData.initialRoster.length;
             const eliminatedList = gameData.eliminated || [];
 
             tempLeaderboardList.innerHTML = ''; 
 
-            eliminatedList.forEach((char, index) => {
+            [...eliminatedList].reverse().forEach((char, index) => {
                 const rank = totalCharacters - index;
                 const li = document.createElement('li');
                 li.className = 'leaderboard-item';
@@ -1578,24 +1670,16 @@
 
         const showVoteModal = (gameData) => {
              const { attackerId, defenderId, votes, voteDeadline } = gameData.currentDuel;
-             if (!attackerId || !defenderId) {
-                console.error("Duel data incomplete:", gameData.currentDuel);
-                showMessage("Errore: Sfidanti non validi.", 3000);
-                return;
-             }
+             if (!attackerId || !defenderId) return;
              
              const allChars = [...gameData.characters, ...gameData.eliminated];
              const attacker = allChars.find(c => c.id === attackerId);
              const defender = allChars.find(c => c.id === defenderId);
 
-             if (!attacker || !defender) {
-                console.error("Could not find attacker or defender from IDs.", { attackerId, defenderId });
-                showMessage("Errore: Dati sfidanti non trovati.", 3000);
-                return;
-             }
-            
-             attackerInfo.innerHTML = `<img src="${attacker.imgSrc}"><h3>${attacker.name}</h3>`;
-             defenderInfo.innerHTML = `<img src="${defender.imgSrc}"><h3>${defender.name}</h3>`;
+             if (!attacker || !defender) return;
+             
+             attackerInfo.innerHTML = `<img src="${attacker.imgSrc}"><h3>${attacker.name}</h3><p class="vote-count-display"></p>`;
+             defenderInfo.innerHTML = `<img src="${defender.imgSrc}"><h3>${defender.name}</h3><p class="vote-count-display"></p>`;
              voteActions.innerHTML = `
                 <button class="btn-primary vote-btn" data-winner-id="${attackerId}">VOTA ${attacker.name}</button>
                 <button class="btn-primary vote-btn" data-winner-id="${defenderId}">VOTA ${defender.name}</button>
@@ -1607,7 +1691,7 @@
                 btn.addEventListener('click', () => castVote(btn.dataset.winnerId));
              });
              
-             renderPlayerAdvantages(gameData, true); // Render advantages in modal
+             renderPlayerAdvantages(gameData, true);
 
              voteModal.style.display = 'flex';
              voteView.style.display = 'block';
@@ -1615,7 +1699,7 @@
              
              clearLocalTimers();
              const timerInterval = setInterval(() => {
-                 const timeLeft = Math.max(0, Math.ceil((voteDeadline - Date.now()) / 1000));
+                 const timeLeft = Math.max(0, Math.ceil(((voteDeadline || 0) - Date.now()) / 1000));
                  voteTimer.textContent = timeLeft;
                  if (timeLeft <= 0) clearInterval(timerInterval);
              }, 1000);
@@ -1624,9 +1708,9 @@
         
         const displayResults = (gameData) => {
             const winner = gameData.characters.find(c => c.territories.length > 0);
-            winnerAnnouncement.textContent = `IL VINCITORE È ${winner.name}!`;
+            winnerAnnouncement.textContent = winner ? `IL VINCITORE È ${winner.name}!` : "LA PARTITA È FINITA!";
 
-            const finalRankings = [winner, ...[...gameData.eliminated].reverse()];
+            const finalRankings = winner ? [winner, ...[...gameData.eliminated].reverse()] : [...gameData.eliminated].reverse();
             
             finalRankingTableBody.innerHTML = '';
             finalRankings.forEach((char, i) => {
@@ -1650,10 +1734,10 @@
                 
                 await updateDoc(gameRef, {
                     gameState: 'lobby',
-                    characters: localRoster, 
+                    characters: gameData.initialRoster, 
                     eliminated: [],
                     currentDuel: null,
-                    judges: gameData.judges
+                    judges: gameData.judges.map(j => ({...j, usedAdvantages: []})), // Reset used advantages
                 });
                 listenToGameUpdates(currentGameId);
              } catch (error) {
@@ -1717,9 +1801,12 @@
              unsubFromChat = null;
              currentGameId = null;
              isLogicRunning = false;
+             isProcessingDuel = false;
              localRoster = [];
              clearLocalTimers();
              showScreen('home-screen');
+             joinGameBtn.disabled = false;
+             createLobbyBtn.disabled = false;
         };
 
         const generateGameId = () => Math.random().toString(36).substring(2, 7).toUpperCase();
@@ -1806,10 +1893,8 @@
             let myAdvantages = judges[meIndex].advantages || [];
             
             if (myAdvantages.includes(key)) {
-                // Deselect
                 myAdvantages = myAdvantages.filter(adv => adv !== key);
             } else {
-                // Select
                 if (myAdvantages.length < 2) {
                     myAdvantages.push(key);
                 } else {
@@ -1823,8 +1908,10 @@
         };
         
         const renderPlayerAdvantages = (gameData, inModal = false) => {
-            const container = inModal ? playerAdvantagesListModal : playerAdvantagesList;
-            const parentContainer = inModal ? playerAdvantagesContainerModal : document.getElementById('player-advantages-container');
+            const container = inModal ? playerAdvantagesListModal : null; // Not using non-modal one for now
+            const parentContainer = inModal ? playerAdvantagesContainerModal : null;
+            if (!container || !parentContainer) return;
+
             container.innerHTML = '';
 
             const me = gameData.judges.find(j => j.uid === currentUser.uid);
@@ -1840,10 +1927,10 @@
                 const btn = document.createElement('button');
                 btn.className = 'player-advantage-btn';
                 btn.dataset.advantageKey = key;
-                btn.innerHTML = `${adv.emoji}<span class="tooltip">${adv.name}</span>`;
+                btn.innerHTML = `${adv.emoji}<span class="tooltip">${adv.name}: ${adv.description}</span>`;
                 
                 const usedAdvantages = me.usedAdvantages || [];
-                if (usedAdvantages.includes(key)) {
+                if (usedAdvantages.includes(key) || gameData.currentDuel?.usedAdvantages?.[me.uid]) {
                     btn.disabled = true;
                 }
 
@@ -1853,28 +1940,92 @@
         };
 
         const useAdvantage = async (key, gameData) => {
-             // Basic validation
             if (!gameData.currentDuel || gameData.gameState !== 'voting') {
                 showMessage("Puoi usare i vantaggi solo durante la fase di voto!", 3000);
                 return;
             }
             
+            // Handle advantages that require more user input first
+            if (key === 'bodyguard') {
+                showBodyguardChoiceModal(gameData, key);
+                return;
+            }
+
             // Mark advantage as used for the player
             const gameRef = doc(db, "games", currentGameId);
             const judges = [...gameData.judges];
             const meIndex = judges.findIndex(j => j.uid === currentUser.uid);
             let usedAdvantages = judges[meIndex].usedAdvantages || [];
+            if(usedAdvantages.includes(key) || gameData.currentDuel.usedAdvantages?.[currentUser.uid]) return; // Already used or played one this round
             usedAdvantages.push(key);
             judges[meIndex].usedAdvantages = usedAdvantages;
             
-            // Add the used advantage to the current duel data for the host to process
-            const advantagePath = `currentDuel.activeAdvantages.${currentUser.uid}`;
+            const advantagePath = `currentDuel.usedAdvantages.${currentUser.uid}`;
             await updateDoc(gameRef, { 
                 judges,
-                [advantagePath]: key
+                [advantagePath]: { key }
             });
             showMessage(`Vantaggio "${advantages[key].name}" attivato!`, 2000);
         };
+        
+        const showBodyguardChoiceModal = (gameData, advantageKey) => {
+            const { attackerId, defenderId } = gameData.currentDuel;
+            const allChars = [...gameData.characters, ...gameData.eliminated];
+            const attacker = allChars.find(c => c.id === attackerId);
+            const defender = allChars.find(c => c.id === defenderId);
+            
+            bodyguardChoiceActions.innerHTML = `
+                <button class="btn-secondary" data-target-id="${attacker.id}">${attacker.name}</button>
+                <button class="btn-secondary" data-target-id="${defender.id}">${defender.name}</button>
+            `;
+            bodyguardChoiceActions.querySelectorAll('button').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    await useTargetedAdvantage(advantageKey, btn.dataset.targetId, gameData);
+                    bodyguardChoiceModal.style.display = 'none';
+                });
+            });
+            bodyguardChoiceModal.style.display = 'flex';
+        };
+        
+        const useTargetedAdvantage = async (key, targetId, gameData) => {
+             const gameRef = doc(db, "games", currentGameId);
+             const judges = [...gameData.judges];
+             const meIndex = judges.findIndex(j => j.uid === currentUser.uid);
+             let usedAdvantages = judges[meIndex].usedAdvantages || [];
+             if(usedAdvantages.includes(key) || gameData.currentDuel.usedAdvantages?.[currentUser.uid]) return;
+             usedAdvantages.push(key);
+             judges[meIndex].usedAdvantages = usedAdvantages;
+             
+             const advantagePath = `currentDuel.usedAdvantages.${currentUser.uid}`;
+             await updateDoc(gameRef, { 
+                 judges,
+                 [advantagePath]: { key, target: targetId }
+             });
+             showMessage(`Vantaggio "${advantages[key].name}" attivato!`, 2000);
+        };
+
+        const showShieldChoiceModal = (gameData) => {
+            const { attackerId, defenderId } = gameData.currentDuel;
+            const allChars = [...gameData.characters, ...gameData.eliminated];
+            const attacker = allChars.find(c => c.id === attackerId);
+            const defender = allChars.find(c => c.id === defenderId);
+
+            shieldChoiceActions.innerHTML = `
+                <button class="btn-secondary" data-save-id="${attacker.id}">SALVA ${attacker.name}</button>
+                <button class="btn-secondary" data-save-id="${defender.id}">SALVA ${defender.name}</button>
+            `;
+             shieldChoiceActions.querySelectorAll('button').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const savedCharName = btn.dataset.saveId === attacker.id ? attacker.name : defender.name;
+                    await updateDoc(doc(db, "games", currentGameId), {
+                        gameState: 'round_end',
+                        message: `${savedCharName} è stato salvato dallo Scudo del Destino!`
+                    });
+                    shieldChoiceModal.style.display = 'none';
+                });
+            });
+            shieldChoiceModal.style.display = 'flex';
+        }
 
 
         // --- EVENT LISTENERS ---
@@ -1925,4 +2076,3 @@
     </script>
 </body>
 </html>
-
